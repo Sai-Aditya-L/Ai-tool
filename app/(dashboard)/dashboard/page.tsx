@@ -27,6 +27,8 @@ export default async function DashboardPage() {
     urgentTasks,
     recentTasks,
     trackers,
+    unreadNotifications,
+    upcomingFiles,
   ] = await Promise.all([
     prisma.task.count({ where: { userId: user!.id, status: { in: ['pending', 'in_progress'] } } }),
     prisma.task.count({ where: { userId: user!.id, status: 'completed', completedAt: { gte: startOfDay } } }),
@@ -58,11 +60,13 @@ export default async function DashboardPage() {
       orderBy: { dueDate: 'asc' },
       take: 4,
     }),
+    prisma.notification.count({ where: { userId: user!.id, read: false } }),
+    prisma.userFile.findMany({ where: { userId: user!.id }, orderBy: { createdAt: 'desc' }, take: 3 }),
   ])
 
   const dashData = {
-    stats: { pendingTasks, completedToday, todayRemindersCount: todayReminders.length },
-    data: { todayReminders, upcomingReminders, recentActivity, urgentTasks, recentTasks, trackers },
+    stats: { pendingTasks, completedToday, todayRemindersCount: todayReminders.length, unreadNotifications },
+    data: { todayReminders, upcomingReminders, recentActivity, urgentTasks, recentTasks, trackers, recentFiles: upcomingFiles },
   }
 
   return (
@@ -111,6 +115,18 @@ export default async function DashboardPage() {
             </div>
             <div className="text-3xl font-bold text-white mb-1">{urgentTasks.length}</div>
             <div className="text-red-400/60 text-xs">Needs attention</div>
+          </div>
+
+          {/* Unread Notifications stat card */}
+          <div className="glass-panel-hover rounded-2xl p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="text-white/40 text-xs uppercase tracking-wider">Unread Notifications</div>
+              <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center">
+                <span className="text-yellow-400 text-sm">🔔</span>
+              </div>
+            </div>
+            <div className="text-3xl font-bold text-white mb-1">{unreadNotifications}</div>
+            <div className="text-yellow-400/60 text-xs">Awaiting review</div>
           </div>
 
           {/* Client-side dynamic components */}

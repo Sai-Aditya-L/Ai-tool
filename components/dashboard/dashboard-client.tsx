@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { formatDate, formatRelativeTime } from '@/lib/utils'
 import Link from 'next/link'
-import { CheckSquare, Bell, Activity, BarChart2, ChevronRight, Check, Clock } from 'lucide-react'
+import { CheckSquare, Bell, Activity, BarChart2, ChevronRight, Check, Clock, Mail, Layers } from 'lucide-react'
 
 interface DashboardClientProps {
   initialData: {
@@ -11,6 +11,7 @@ interface DashboardClientProps {
       pendingTasks: number
       completedToday: number
       todayRemindersCount: number
+      unreadNotifications: number
     }
     data: {
       todayReminders: any[]
@@ -19,6 +20,7 @@ interface DashboardClientProps {
       urgentTasks: any[]
       recentTasks: any[]
       trackers: any[]
+      recentFiles: any[]
     }
   }
   userId: string
@@ -43,7 +45,7 @@ const ACTION_ICONS: Record<string, string> = {
 }
 
 export function DashboardClient({ initialData }: DashboardClientProps) {
-  const { data } = initialData
+  const { data, stats } = initialData
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
 
   async function completeTask(taskId: string) {
@@ -173,6 +175,40 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
           </ul>
         </div>
       )}
+
+      {/* System Status Widget */}
+      <div className="glass-panel-hover rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Layers size={14} className="text-purple-400" />
+          <h3 className="text-white/70 text-sm font-medium">System Status</h3>
+        </div>
+        <ul className="space-y-3">
+          <li className="flex items-center justify-between">
+            <span className="text-white/50 text-xs">Files uploaded</span>
+            <span className="text-purple-400 text-sm font-semibold">{data.recentFiles.length}</span>
+          </li>
+          <li className="flex items-center justify-between">
+            <span className="text-white/50 text-xs">Unread notifications</span>
+            <span className="text-yellow-400 text-sm font-semibold">{stats.unreadNotifications}</span>
+          </li>
+        </ul>
+        <div className="mt-4 pt-3 border-t border-white/5 flex flex-col gap-2">
+          <Link
+            href="/emails"
+            className="flex items-center gap-2 text-xs text-cyan-400/70 hover:text-cyan-400 transition-colors"
+          >
+            <Mail size={12} />
+            Go to Emails
+          </Link>
+          <Link
+            href="/integrations"
+            className="flex items-center gap-2 text-xs text-cyan-400/70 hover:text-cyan-400 transition-colors"
+          >
+            <Layers size={12} />
+            Go to Integrations
+          </Link>
+        </div>
+      </div>
 
       {/* Activity Feed */}
       <div className="glass-panel-hover rounded-2xl p-5 md:col-span-2 xl:col-span-1">

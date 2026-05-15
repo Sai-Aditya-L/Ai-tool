@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Mic, Paperclip, Zap, RotateCcw, Copy, Check, StopCircle } from 'lucide-react'
+import { Send, Mic, Paperclip, Zap, RotateCcw, Copy, Check, StopCircle, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, History } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -12,6 +12,13 @@ interface Message {
   toolsUsed?: string[]
   timestamp: Date
   loading?: boolean
+}
+
+interface ConversationSummary {
+  id: string
+  title: string
+  updatedAt: string
+  messages: { content: string }[]
 }
 
 const SUGGESTED_PROMPTS = [
@@ -39,9 +46,74 @@ export function ChatInterface() {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [loadingConversation, setLoadingConversation] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Fetch conversation list on mount and whenever sidebar opens
+  useEffect(() => {
+    fetchConversations()
+  }, [])
+
+  async function fetchConversations() {
+    try {
+      const res = await fetch('/api/conversations')
+      if (!res.ok) return
+      const data = await res.json()
+      setConversations(data.conversations ?? [])
+    } catch {
+      // silently fail — sidebar is non-critical
+    }
+  }
+
+  async function loadConversation(id: string) {
+    if (loadingConversation) return
+    setLoadingConversation(id)
+    try {
+      const res = await fetch(`/api/conversations/${id}`)
+      if (!res.ok) throw new Error('Failed to load')
+      const data = await res.json()
+      const conv = data.conversation
+      const loaded: Message[] = conv.messages.map((m: any) => {
+        let toolsUsed: string[] | undefined
+        if (m.toolCalls) {
+          try {
+            toolsUsed = typeof m.toolCalls === 'string' ? JSON.parse(m.toolCalls) : m.toolCalls
+          } catch {
+            toolsUsed = undefined
+          }
+        }
+        return {
+          id: m.id ?? Date.now().toString(),
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          toolsUsed,
+          timestamp: m.createdAt ? new Date(m.createdAt) : new Date(),
+        }
+      })
+      setMessages(loaded)
+      setConversationId(id)
+    } catch {
+      toast.error('Failed to load conversation')
+    } finally {
+      setLoadingConversation(null)
+    }
+  }
+
+  async function deleteConversation(id: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    try {
+      const res = await fetch(`/api/conversations/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete')
+      setConversations(prev => prev.filter(c => c.id !== id))
+      if (conversationId === id) clearConversation()
+    } catch {
+      toast.error('Failed to delete conversation')
+    }
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -145,6 +217,7 @@ export function ChatInterface() {
       timestamp: new Date(),
     }])
     setConversationId(null)
+    fetchConversations()
   }
 
   function formatContent(content: string) {
@@ -160,6 +233,86 @@ export function ChatInterface() {
 
   return (
     <div className="flex h-full">
+      {/* Conversation history sidebar */}
+      <div
+        className={cn(
+          'relative flex-shrink-0 flex flex-col border-r border-cyan-400/10 glass-panel transition-all duration-300 overflow-hidden',
+          sidebarOpen ? 'w-64' : 'w-0'
+        )}
+      >
+        {/* Sidebar content — always rendered so transition is smooth */}
+        <div className="flex flex-col h-full w-64">
+          {/* Header */}
+          <div className="flex items-center gap-2 px-3 py-3 border-b border-cyan-400/10 flex-shrink-0">
+            <History size={14} className="text-cyan-400 flex-shrink-0" />
+            <span className="text-white/70 text-xs font-semibold uppercase tracking-wider flex-1 truncate">History</span>
+          </div>
+
+          {/* New Chat button */}
+          <div className="px-2 py-2 flex-shrink-0">
+            <button
+              onClick={() => { clearConversation() }}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-cyan-400/20 bg-cyan-400/5 hover:bg-cyan-400/10 text-cyan-400 text-xs font-medium transition-all"
+            >
+              <Plus size={13} />
+              New Chat
+            </button>
+          </div>
+
+          {/* Conversation list */}
+          <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
+            {conversations.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-24 gap-2 text-white/25">
+                <MessageSquare size={20} />
+                <span className="text-[11px]">No conversations yet</span>
+              </div>
+            )}
+            {conversations.map(conv => (
+              <button
+                key={conv.id}
+                onClick={() => loadConversation(conv.id)}
+                disabled={loadingConversation === conv.id}
+                className={cn(
+                  'group w-full flex items-start gap-2 px-2.5 py-2 rounded-lg text-left transition-all border',
+                  conversationId === conv.id
+                    ? 'border-cyan-400/30 bg-cyan-400/10 text-white/90'
+                    : 'border-transparent hover:border-cyan-400/10 hover:bg-white/5 text-white/60 hover:text-white/80',
+                  loadingConversation === conv.id && 'opacity-50 cursor-wait'
+                )}
+              >
+                <MessageSquare size={12} className="flex-shrink-0 mt-0.5 text-cyan-400/50" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs truncate leading-snug">
+                    {conv.title || 'Untitled'}
+                  </p>
+                  <p className="text-[10px] text-white/30 mt-0.5">
+                    {formatRelativeTime(new Date(conv.updatedAt))}
+                  </p>
+                </div>
+                <button
+                  onClick={(e) => deleteConversation(conv.id, e)}
+                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-red-400 p-0.5 rounded"
+                  title="Delete conversation"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Sidebar toggle button */}
+      <div className="relative flex-shrink-0 flex items-start pt-3">
+        <button
+          onClick={() => setSidebarOpen(o => !o)}
+          className="z-10 flex items-center justify-center w-5 h-8 rounded-r-lg bg-white/5 border border-l-0 border-cyan-400/10 hover:bg-cyan-400/10 hover:border-cyan-400/20 text-white/40 hover:text-cyan-400 transition-all"
+          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          {sidebarOpen ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+        </button>
+      </div>
+
       {/* Main chat */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Messages */}
