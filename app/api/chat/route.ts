@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { anthropic, NEXUS_SYSTEM_PROMPT, NEXUS_TOOLS } from '@/lib/anthropic'
+import {
+  listEmails,
+  createDraft,
+  listCalendarEvents,
+  createCalendarEvent,
+  isGoogleConnected,
+} from '@/lib/google'
 import Anthropic from '@anthropic-ai/sdk'
 
 async function executeToolCall(
@@ -235,6 +242,153 @@ async function executeToolCall(
           memoriesStored: memories,
           recentActivity: recentActivity.map(a => ({ action: a.action, details: a.details, time: a.createdAt })),
         })
+      }
+
+      case 'get_emails': {
+        const connected = await isGoogleConnected(userId)
+        if (!connected) return JSON.stringify({ error: 'Gmail not connected. Ask the user to connect Google in Integrations settings.' })
+        try {
+          const maxResults = toolInput.maxResults ? parseInt(toolInput.maxResults as string) : 10
+          const query = toolInput.unreadOnly === 'true' ? 'is:unread' : (toolInput.query as string || '')
+          const { emails } = await listEmails(userId, { maxResults, query })
+          return JSON.stringify({ emails: (emails || []).map((e: any) => ({ id: e.id, subject: e.subject, from: e.from, fromName: e.fromName, snippet: e.snippet, isRead: e.isRead, receivedAt: e.receivedAt })) })
+        } catch {
+          return JSON.stringify({ error: 'Failed to fetch emails' })
+        }
+      }
+
+      case 'summarize_emails': {
+        const connected = await isGoogleConnected(userId)
+        if (!connected) return JSON.stringify({ error: 'Gmail not connected.' })
+        try {
+          const count = toolInput.count ? parseInt(toolInput.count as string) : 10
+          const { emails } = await listEmails(userId, { maxResults: count })
+          const emailList = emails || []
+          return JSON.stringify({
+            total: emailList.length,
+            unread: emailList.filter((e: any) => !e.isRead).length,
+            emails: emailList.map((e: any) => ({ subject: e.subject, from: e.from, snippet: e.snippet, isRead: e.isRead, receivedAt: e.receivedAt })),
+          })
+        } catch {
+          return JSON.stringify({ error: 'Failed to summarize emails' })
+        }
+      }
+
+      case 'draft_email': {
+        const connected = await isGoogleConnected(userId)
+        if (!connected) return JSON.stringify({ error: 'Gmail not connected.' })
+        try {
+          const draftData = await createDraft(userId, {
+            to: toolInput.to as string,
+            subject: toolInput.subject as string,
+            body: toolInput.body as string,
+            replyToMessageId: toolInput.replyToId as string | undefined,
+          })
+          const draftId = draftData?.id || ''
+          await prisma.emailDraft.create({
+            data: {
+              userId,
+              to: toolInput.to as string,
+              subject: toolInput.subject as string,
+              body: toolInput.body as string,
+              status: 'draft',
+            },
+          }).catch(() => {})
+          return JSON.stringify({ success: true, draftId, message: 'Draft saved. User must review and send from the Emails page.' })
+        } catch {
+          return JSON.stringify({ error: 'Failed to create draft' })
+        }
+      }
+
+      case 'get_calendar_events': {
+        const connected = await isGoogleConnected(userId)
+        try {
+          if (connected) {
+            const days = toolInput.days ? parseInt(toolInput.days as string) : 7
+            const maxResults = toolInput.maxResults ? parseInt(toolInput.maxResults as string) : 10
+            const timeMin = new Date()
+            const timeMax = new Date()
+            timeMax.setDate(timeMax.getDate() + days)
+            const events = await listCalendarEvents(userId, { timeMin, timeMax, maxResults })
+            return JSON.stringify({ source: 'google_calendar', events })
+          } else {
+            const upcoming = await prisma.reminder.findMany({
+              where: { userId, status: 'pending', dueAt: { gte: new Date() } },
+              orderBy: { dueAt: 'asc' },
+              take: 10,
+            })
+            return JSON.stringify({ source: 'nexus_reminders', events: upcoming.map(r => ({ id: r.id, title: r.title, start: r.dueAt, priority: r.priority })) })
+          }
+        } catch {
+          return JSON.stringify({ error: 'Failed to fetch calendar events' })
+        }
+      }
+
+      case 'create_calendar_event': {
+        const connected = await isGoogleConnected(userId)
+        try {
+          if (connected) {
+            const event = await createCalendarEvent(userId, {
+              title: toolInput.title as string,
+              description: toolInput.description as string | undefined,
+              startTime: toolInput.startTime as string,
+              endTime: toolInput.endTime as string,
+              location: toolInput.location as string | undefined,
+              attendees: toolInput.attendees ? (toolInput.attendees as string).split(',').map(e => e.trim()) : undefined,
+            })
+            return JSON.stringify({ success: true, event, source: 'google_calendar' })
+          } else {
+            const reminder = await prisma.reminder.create({
+              data: {
+                userId,
+                title: toolInput.title as string,
+                description: toolInput.description as string | undefined,
+                dueAt: new Date(toolInput.startTime as string),
+                priority: 'medium',
+              },
+            })
+            return JSON.stringify({ success: true, reminder, source: 'nexus_reminder', note: 'Created as NEXUS reminder (Google Calendar not connected)' })
+          }
+        } catch {
+          return JSON.stringify({ error: 'Failed to create calendar event' })
+        }
+      }
+
+      case 'check_calendar_availability': {
+        const connected = await isGoogleConnected(userId)
+        if (!connected) return JSON.stringify({ available: true, note: 'Google Calendar not connected — cannot check real availability' })
+        try {
+          const date = toolInput.date as string
+          const startHour = toolInput.startHour ? parseInt(toolInput.startHour as string) : 9
+          const endHour = toolInput.endHour ? parseInt(toolInput.endHour as string) : 17
+          const timeMin = new Date(`${date}T${String(startHour).padStart(2, '0')}:00:00`)
+          const timeMax = new Date(`${date}T${String(endHour).padStart(2, '0')}:00:00`)
+          const events = await listCalendarEvents(userId, { timeMin, timeMax, maxResults: 20 })
+          return JSON.stringify({ date, startHour, endHour, eventCount: events.length, busy: events, available: events.length === 0 })
+        } catch {
+          return JSON.stringify({ error: 'Failed to check availability' })
+        }
+      }
+
+      case 'get_notifications': {
+        const unreadOnly = toolInput.unreadOnly === 'true'
+        const notifications = await prisma.notification.findMany({
+          where: { userId, ...(unreadOnly ? { read: false } : {}) },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        })
+        return JSON.stringify({ notifications: notifications.map(n => ({ id: n.id, title: n.title, body: n.body, type: n.type, read: n.read, createdAt: n.createdAt })) })
+      }
+
+      case 'get_conversations': {
+        const limit = toolInput.limit ? parseInt(toolInput.limit as string) : 10
+        const conversations = await prisma.conversation.findMany({
+          where: { userId },
+          orderBy: { updatedAt: 'desc' },
+          take: limit,
+          include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+        })
+        return JSON.stringify({ conversations: conversations.map(c => ({ id: c.id, title: c.title, updatedAt: c.updatedAt, lastMessage: c.messages[0]?.content?.substring(0, 100) })) })
       }
 
       default:

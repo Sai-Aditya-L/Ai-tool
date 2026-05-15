@@ -27,6 +27,9 @@ Your capabilities:
 - Code review and development assistance
 - Research and information synthesis
 - Daily planning and productivity optimization
+- Email management via Gmail (reading, summarizing, drafting)
+- Calendar event creation and scheduling via Google Calendar
+- Meeting detection and conflict checking
 
 When the user asks you to DO something (create a task, set a reminder, etc.), use the appropriate tool function. When they ask questions, answer thoughtfully. Always confirm before performing destructive actions.
 
@@ -194,6 +197,108 @@ export const NEXUS_TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_emails',
+    description: 'Fetch recent emails from Gmail inbox',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        maxResults: { type: 'string', description: 'Max number of emails to fetch (default 10)' },
+        query: { type: 'string', description: 'Gmail search query (e.g. "is:unread", "from:boss@company.com")' },
+        unreadOnly: { type: 'string', description: 'Fetch only unread emails (true/false)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'summarize_emails',
+    description: 'Get a summary of recent emails, detecting bills, deadlines, meetings, and action items',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        count: { type: 'string', description: 'How many recent emails to summarize' },
+        focus: { type: 'string', description: 'Focus area: bills, meetings, deadlines, all' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'draft_email',
+    description: 'Draft an email reply or new email. ALWAYS requires user confirmation before sending.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        to: { type: 'string', description: 'Recipient email address' },
+        subject: { type: 'string', description: 'Email subject' },
+        body: { type: 'string', description: 'Email body text' },
+        replyToId: { type: 'string', description: 'Gmail message ID to reply to (if replying)' },
+      },
+      required: ['to', 'subject', 'body'],
+    },
+  },
+  {
+    name: 'get_calendar_events',
+    description: 'Fetch upcoming events from Google Calendar',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        days: { type: 'string', description: 'How many days ahead to fetch (default 7)' },
+        maxResults: { type: 'string', description: 'Maximum number of events (default 10)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'create_calendar_event',
+    description: 'Create a new event in Google Calendar',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: { type: 'string', description: 'Event title' },
+        description: { type: 'string', description: 'Event description' },
+        startTime: { type: 'string', description: 'Start time in ISO 8601 format' },
+        endTime: { type: 'string', description: 'End time in ISO 8601 format' },
+        location: { type: 'string', description: 'Event location' },
+        attendees: { type: 'string', description: 'Comma-separated attendee emails' },
+      },
+      required: ['title', 'startTime', 'endTime'],
+    },
+  },
+  {
+    name: 'check_calendar_availability',
+    description: 'Check calendar availability for a time range',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        date: { type: 'string', description: 'Date to check in ISO format (YYYY-MM-DD)' },
+        startHour: { type: 'string', description: 'Start hour (0-23)' },
+        endHour: { type: 'string', description: 'End hour (0-23)' },
+      },
+      required: ['date'],
+    },
+  },
+  {
+    name: 'get_notifications',
+    description: 'Get recent NEXUS notifications for the user',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        unreadOnly: { type: 'string', description: 'Show only unread notifications (true/false)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_conversations',
+    description: 'List past NEXUS conversations',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        limit: { type: 'string', description: 'Max conversations to return' },
+      },
       required: [],
     },
   },

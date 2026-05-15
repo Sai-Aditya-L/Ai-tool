@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { Bell, Search, Cpu } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface HeaderProps {
@@ -13,7 +13,15 @@ interface HeaderProps {
 export function Header({ title, subtitle }: HeaderProps) {
   const { data: session } = useSession()
   const [searchQuery, setSearchQuery] = useState('')
+  const [unreadCount, setUnreadCount] = useState(0)
   const router = useRouter()
+
+  useEffect(() => {
+    fetch('/api/notifications?unreadOnly=true')
+      .then(r => r.json())
+      .then(d => setUnreadCount(d.unreadCount || 0))
+      .catch(() => {})
+  }, [])
 
   const now = new Date()
   const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
@@ -63,9 +71,17 @@ export function Header({ title, subtitle }: HeaderProps) {
       </div>
 
       {/* Notifications */}
-      <button className="relative p-2 rounded-lg text-white/40 hover:text-cyan-400 hover:bg-cyan-400/5 transition-all border border-transparent hover:border-cyan-400/15">
+      <button
+        onClick={() => router.push('/activity')}
+        className="relative p-2 rounded-lg text-white/40 hover:text-cyan-400 hover:bg-cyan-400/5 transition-all border border-transparent hover:border-cyan-400/15"
+        title="Notifications"
+      >
         <Bell size={16} />
-        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-cyan-400 rounded-full" />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 min-w-[16px] h-4 bg-cyan-400 rounded-full flex items-center justify-center text-[9px] text-black font-bold px-0.5">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
       </button>
 
       {/* User avatar */}
