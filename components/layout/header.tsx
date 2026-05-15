@@ -5,6 +5,7 @@ import { Bell, Search, Cpu } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSearchContext } from '@/components/search/search-provider'
+import { ModeSwitcher } from '@/components/ui/mode-switcher'
 
 interface HeaderProps {
   title: string
@@ -74,6 +75,9 @@ export function Header({ title, subtitle }: HeaderProps) {
           ⌘K
         </kbd>
       </div>
+
+      {/* Mode Switcher */}
+      <ModeSwitcher />
 
       {/* Clock */}
       <div className="hidden lg:flex flex-col items-end pl-4 border-l border-cyan-400/10">
