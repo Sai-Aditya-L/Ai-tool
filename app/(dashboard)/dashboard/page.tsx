@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { Header } from '@/components/layout/header'
 import { AIOrb } from '@/components/dashboard/ai-orb'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
+import { WeatherWidget } from '@/components/dashboard/weather-widget'
+import { NewsWidget } from '@/components/dashboard/news-widget'
+import { CryptoWidget } from '@/components/dashboard/crypto-widget'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -159,6 +162,13 @@ export default async function DashboardPage() {
             initialData={dashData}
             userId={user!.id}
           />
+
+          {/* Live Data Row */}
+          <div className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-4">
+            <WeatherWidget />
+            <NewsWidget />
+            <CryptoWidget />
+          </div>
         </div>
       </div>
     </div>
