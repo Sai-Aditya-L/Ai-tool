@@ -82,13 +82,13 @@ export default function DailySummariesPage() {
     fetchSummaries()
   }, [fetchSummaries])
 
-  async function generateSummary() {
+  async function generateSummary(type: 'daily' | 'weekly' = 'daily') {
     setGenerating(true)
     try {
       const res = await fetch('/api/daily-summaries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'daily' }),
+        body: JSON.stringify({ type }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -122,9 +122,9 @@ export default function DailySummariesPage() {
         <div className="max-w-3xl mx-auto space-y-5">
 
           {/* Action bar */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <button
-              onClick={generateSummary}
+              onClick={() => generateSummary('daily')}
               disabled={generating}
               className="nexus-btn-primary flex items-center gap-2 text-sm"
             >
@@ -133,6 +133,14 @@ export default function DailySummariesPage() {
                 : <Sparkles size={15} />
               }
               {generating ? 'Generating...' : 'Generate Today\'s Briefing'}
+            </button>
+            <button
+              onClick={() => generateSummary('weekly')}
+              disabled={generating}
+              className="nexus-btn-secondary flex items-center gap-2 text-sm"
+            >
+              <Calendar size={15} />
+              Weekly Review
             </button>
           </div>
 
@@ -172,7 +180,7 @@ export default function DailySummariesPage() {
                   </div>
                 </div>
                 <button
-                  onClick={generateSummary}
+                  onClick={() => generateSummary('daily')}
                   disabled={generating}
                   className="flex items-center gap-1.5 text-xs text-white/40 hover:text-cyan-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-cyan-400/5 border border-transparent hover:border-cyan-400/20 disabled:opacity-40"
                 >

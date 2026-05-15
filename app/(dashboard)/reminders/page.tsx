@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, Bell, Clock, Check, Trash2, X, AlertCircle } from 'lucide-react'
+import { Plus, Bell, Clock, Check, Trash2, X, AlertCircle, AlarmClock } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -13,6 +13,66 @@ interface Reminder {
   dueAt: string
   status: string
   priority: string
+  recurring?: boolean
+  recurrenceRule?: string | null
+  snoozedUntil?: string | null
+}
+
+const SNOOZE_OPTIONS = [
+  { label: '15 min', getValue: () => { const d = new Date(); d.setMinutes(d.getMinutes() + 15); return d } },
+  { label: '1 hour', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 1); return d } },
+  { label: '3 hours', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 3); return d } },
+  {
+    label: 'Tomorrow morning (9am)', getValue: () => {
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d
+    },
+  },
+  {
+    label: 'Next week', getValue: () => {
+      const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(9, 0, 0, 0); return d
+    },
+  },
+]
+
+const RECURRENCE_RULES = ['daily', 'weekly', 'weekdays', 'monthly', 'yearly']
+
+// ─── Snooze Dropdown ──────────────────────────────────────────────────────────
+
+interface SnoozeDropdownProps {
+  reminderId: string
+  onSnooze: (id: string, until: string) => void
+  onClose: () => void
+}
+
+function SnoozeDropdown({ reminderId, onSnooze, onClose }: SnoozeDropdownProps) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-8 z-30 w-52 rounded-xl border border-white/10 shadow-xl"
+      style={{ background: 'rgba(10,15,30,0.97)' }}
+    >
+      <p className="text-white/30 text-[10px] uppercase tracking-widest px-3 pt-2.5 pb-1">Snooze until</p>
+      {SNOOZE_OPTIONS.map(opt => (
+        <button
+          key={opt.label}
+          onClick={() => { onSnooze(reminderId, opt.getValue().toISOString()); onClose() }}
+          className="w-full text-left px-3 py-2 text-xs text-white/70 hover:text-cyan-300 hover:bg-cyan-400/10 transition-all"
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 export default function RemindersPage() {
@@ -20,6 +80,7 @@ export default function RemindersPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [statusFilter, setStatusFilter] = useState('pending')
+  const [snoozeOpenId, setSnoozeOpenId] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -48,10 +109,18 @@ export default function RemindersPage() {
     e.preventDefault()
     if (!form.title || !form.dueAt) return
     try {
+      const body: Record<string, unknown> = {
+        title: form.title,
+        description: form.description,
+        dueAt: new Date(form.dueAt).toISOString(),
+        priority: form.priority,
+        recurring: form.recurring,
+      }
+      if (form.recurring && form.recurrenceRule) body.recurrenceRule = form.recurrenceRule
       const res = await fetch('/api/reminders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, dueAt: new Date(form.dueAt).toISOString() }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error()
       toast.success('Reminder set!')
@@ -77,6 +146,20 @@ export default function RemindersPage() {
     }
   }
 
+  async function snoozeReminder(id: string, snoozedUntil: string) {
+    try {
+      await fetch(`/api/reminders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snoozedUntil, status: 'snoozed' }),
+      })
+      setReminders(prev => prev.map(r => r.id === id ? { ...r, snoozedUntil, status: 'snoozed' } : r))
+      toast.success('Reminder snoozed')
+    } catch {
+      toast.error('Failed to snooze reminder')
+    }
+  }
+
   async function deleteReminder(id: string) {
     if (!confirm('Delete this reminder?')) return
     try {
@@ -95,6 +178,16 @@ export default function RemindersPage() {
   }
 
   const isOverdue = (dueAt: string) => new Date(dueAt) < new Date()
+
+  function isSnoozedActive(r: Reminder) {
+    return !!r.snoozedUntil && new Date(r.snoozedUntil) > new Date()
+  }
+
+  function formatSnoozeTime(iso: string) {
+    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  }
+
+  const isPendingOrActive = (r: Reminder) => r.status === 'pending' || r.status === 'snoozed'
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -177,6 +270,40 @@ export default function RemindersPage() {
                     </select>
                   </div>
                 </div>
+
+                {/* Recurring toggle */}
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, recurring: !f.recurring, recurrenceRule: !f.recurring ? 'weekly' : '' }))}
+                    className="flex items-center gap-3 w-full text-left"
+                  >
+                    <div className={cn(
+                      'w-9 h-5 rounded-full transition-all relative flex-shrink-0',
+                      form.recurring ? 'bg-cyan-400/40 border border-cyan-400/50' : 'bg-white/10 border border-white/15'
+                    )}>
+                      <span className={cn(
+                        'absolute top-0.5 w-4 h-4 rounded-full transition-all',
+                        form.recurring ? 'left-4 bg-cyan-400' : 'left-0.5 bg-white/40'
+                      )} />
+                    </div>
+                    <span className="text-white/60 text-sm">Recurring</span>
+                  </button>
+
+                  {form.recurring && (
+                    <select
+                      value={form.recurrenceRule}
+                      onChange={e => setForm(f => ({ ...f, recurrenceRule: e.target.value }))}
+                      className="nexus-input"
+                    >
+                      <option value="">Select recurrence…</option>
+                      {RECURRENCE_RULES.map(r => (
+                        <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
                 <div className="flex gap-2">
                   <button type="submit" className="nexus-btn-primary flex-1">Set Reminder</button>
                   <button type="button" onClick={() => setShowForm(false)} className="nexus-btn-secondary px-4">
@@ -218,13 +345,25 @@ export default function RemindersPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-medium text-white/85">{r.title}</p>
-                      <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         {isOverdue(r.dueAt) && r.status === 'pending' && (
                           <AlertCircle size={14} className="text-red-400" aria-label="Overdue" />
                         )}
-                        <span className={cn('text-xs px-2 py-0.5 rounded-full border', getPriorityColor(r.priority))}>
-                          {r.priority}
-                        </span>
+                        {/* Snoozed badge */}
+                        {isSnoozedActive(r) ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full border bg-yellow-400/10 border-yellow-400/30 text-yellow-300">
+                            Snoozed until {formatSnoozeTime(r.snoozedUntil!)}
+                          </span>
+                        ) : (
+                          <span className={cn('text-xs px-2 py-0.5 rounded-full border', getPriorityColor(r.priority))}>
+                            {r.priority}
+                          </span>
+                        )}
+                        {r.recurring && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-400/10 border border-cyan-400/20 text-cyan-400/70">
+                            {r.recurrenceRule || 'recurring'}
+                          </span>
+                        )}
                       </div>
                     </div>
                     {r.description && <p className="text-white/40 text-xs mt-1">{r.description}</p>}
@@ -236,8 +375,8 @@ export default function RemindersPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {r.status === 'pending' && (
+                  <div className="flex items-center gap-1 flex-shrink-0 relative">
+                    {isPendingOrActive(r) && (
                       <button
                         onClick={() => completeReminder(r.id)}
                         className="p-1.5 rounded-lg text-white/30 hover:text-green-400 hover:bg-green-400/5 transition-all"
@@ -246,6 +385,27 @@ export default function RemindersPage() {
                         <Check size={14} />
                       </button>
                     )}
+
+                    {/* Snooze button */}
+                    {isPendingOrActive(r) && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setSnoozeOpenId(snoozeOpenId === r.id ? null : r.id)}
+                          className="p-1.5 rounded-lg text-white/30 hover:text-yellow-400 hover:bg-yellow-400/5 transition-all"
+                          title="Snooze"
+                        >
+                          <AlarmClock size={14} />
+                        </button>
+                        {snoozeOpenId === r.id && (
+                          <SnoozeDropdown
+                            reminderId={r.id}
+                            onSnooze={snoozeReminder}
+                            onClose={() => setSnoozeOpenId(null)}
+                          />
+                        )}
+                      </div>
+                    )}
+
                     <button
                       onClick={() => deleteReminder(r.id)}
                       className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/5 transition-all"

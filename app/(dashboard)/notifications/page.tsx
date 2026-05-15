@@ -49,12 +49,25 @@ function groupNotifications(notifications: Notification[]): GroupedNotifications
   return groups
 }
 
+const TYPE_PILLS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'info', label: 'Info' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'error', label: 'Error' },
+  { value: 'success', label: 'Success' },
+  { value: 'reminder', label: 'Reminder' },
+  { value: 'task', label: 'Task' },
+  { value: 'email', label: 'Email' },
+  { value: 'agent', label: 'Agent' },
+]
+
 export default function NotificationsPage() {
   const router = useRouter()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -125,9 +138,9 @@ export default function NotificationsPage() {
     }
   }
 
-  const filtered = filter === 'unread'
-    ? notifications.filter(n => !n.read)
-    : notifications
+  const filtered = notifications
+    .filter(n => filter === 'unread' ? !n.read : true)
+    .filter(n => typeFilter === 'all' ? true : n.type === typeFilter)
 
   const groups = groupNotifications(filtered)
 
@@ -171,6 +184,24 @@ export default function NotificationsPage() {
               Mark all as read
             </button>
           )}
+        </div>
+
+        {/* Type filter pills */}
+        <div className="flex flex-wrap gap-1.5">
+          {TYPE_PILLS.map(pill => (
+            <button
+              key={pill.value}
+              onClick={() => setTypeFilter(pill.value)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs border transition-all',
+                typeFilter === pill.value
+                  ? 'bg-cyan-400/20 text-cyan-300 border-cyan-400/30'
+                  : 'bg-white/5 text-white/40 border-white/10 hover:text-white/60 hover:border-white/20'
+              )}
+            >
+              {pill.label}
+            </button>
+          ))}
         </div>
 
         {/* Notification list */}

@@ -14,6 +14,8 @@ interface Automation {
   conditions: string | null
   status: string
   lastRun: string | null
+  nextRun: string | null
+  runCount: number
   createdAt: string
 }
 
@@ -117,6 +119,25 @@ export default function AutomationsPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [running, setRunning] = useState<string | null>(null)
   const [runResult, setRunResult] = useState<{ id: string; success: boolean; message: string } | null>(null)
+
+  async function handleRunNow(automation: Automation) {
+    setRunning(automation.id)
+    setRunResult(null)
+    try {
+      const res = await fetch('/api/automations/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ automationId: automation.id }),
+      })
+      const data = await res.json()
+      setRunResult({ id: automation.id, success: res.ok, message: data.message || data.error || 'Done' })
+      if (res.ok) fetchAutomations()
+    } catch {
+      setRunResult({ id: automation.id, success: false, message: 'Network error' })
+    } finally {
+      setRunning(null)
+    }
+  }
 
   const fetchAutomations = useCallback(async () => {
     try {
@@ -328,7 +349,17 @@ export default function AutomationsPage() {
                         <ArrowRight size={10} className="mx-1 flex-shrink-0" />
                         <span className="truncate max-w-[200px]">{auto.actions}</span>
                       </div>
-                      <p className="text-white/25 text-[10px] mt-1">Last run: {formatLastRun(auto.lastRun)}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-white/25 text-[10px]">Last run: {formatLastRun(auto.lastRun)}</p>
+                        {auto.runCount > 0 && (
+                          <p className="text-white/20 text-[10px]">{auto.runCount} run{auto.runCount !== 1 ? 's' : ''}</p>
+                        )}
+                      </div>
+                      {runResult?.id === auto.id && (
+                        <p className={`text-[10px] mt-1 ${runResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                          {runResult.message}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className={cn(
@@ -340,8 +371,20 @@ export default function AutomationsPage() {
                         {auto.status}
                       </span>
                       <button
+                        onClick={() => handleRunNow(auto)}
+                        disabled={running === auto.id}
+                        title="Run now"
+                        className="text-white/30 hover:text-cyan-400 transition-colors p-1.5 rounded-lg hover:bg-cyan-400/5 disabled:opacity-40"
+                      >
+                        {running === auto.id
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : <RotateCcw size={14} />
+                        }
+                      </button>
+                      <button
                         onClick={() => toggleStatus(auto)}
                         disabled={toggling === auto.id}
+                        title={auto.status === 'active' ? 'Pause' : 'Resume'}
                         className="text-white/30 hover:text-cyan-400 transition-colors p-1.5 rounded-lg hover:bg-cyan-400/5 disabled:opacity-40"
                       >
                         {toggling === auto.id
@@ -352,6 +395,7 @@ export default function AutomationsPage() {
                       <button
                         onClick={() => handleDelete(auto)}
                         disabled={deleting === auto.id}
+                        title="Delete"
                         className="text-white/20 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-400/5 disabled:opacity-40"
                       >
                         {deleting === auto.id

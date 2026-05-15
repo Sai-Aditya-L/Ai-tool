@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, StickyNote, Pin, PinOff, Trash2, X, Search, Edit3, Save } from 'lucide-react'
+import { Plus, StickyNote, Pin, PinOff, Trash2, X, Search, Edit3, Save, Eye } from 'lucide-react'
 import { cn, formatRelativeTime, parseTags } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -34,6 +34,101 @@ const COLOR_CLASSES: Record<string, string> = {
   red: 'border-red-400/30 bg-red-400/3',
 }
 
+// ── Markdown renderer (no dangerouslySetInnerHTML) ───────────────────────────
+function renderMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split('\n')
+  const nodes: React.ReactNode[] = []
+  let i = 0
+
+  function parseInline(raw: string, key: string): React.ReactNode {
+    // Split on bold (**text**), italic (*text*), code (`code`)
+    const parts = raw.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/)
+    return (
+      <span key={key}>
+        {parts.map((part, idx) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={idx}>{part.slice(2, -2)}</strong>
+          }
+          if (part.startsWith('*') && part.endsWith('*')) {
+            return <em key={idx}>{part.slice(1, -1)}</em>
+          }
+          if (part.startsWith('`') && part.endsWith('`')) {
+            return (
+              <code key={idx} style={{ fontFamily: 'monospace', background: 'rgba(0,212,255,0.1)', padding: '1px 4px', borderRadius: 3, fontSize: '0.9em' }}>
+                {part.slice(1, -1)}
+              </code>
+            )
+          }
+          return part
+        })}
+      </span>
+    )
+  }
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Headings
+    if (line.startsWith('### ')) {
+      nodes.push(<h3 key={i} style={{ fontSize: '1em', fontWeight: 600, color: 'rgba(255,255,255,0.85)', margin: '8px 0 4px' }}>{parseInline(line.slice(4), `h3-${i}`)}</h3>)
+      i++
+      continue
+    }
+    if (line.startsWith('## ')) {
+      nodes.push(<h2 key={i} style={{ fontSize: '1.1em', fontWeight: 600, color: 'rgba(255,255,255,0.9)', margin: '10px 0 4px' }}>{parseInline(line.slice(3), `h2-${i}`)}</h2>)
+      i++
+      continue
+    }
+    if (line.startsWith('# ')) {
+      nodes.push(<h1 key={i} style={{ fontSize: '1.25em', fontWeight: 700, color: '#fff', margin: '12px 0 6px' }}>{parseInline(line.slice(2), `h1-${i}`)}</h1>)
+      i++
+      continue
+    }
+
+    // Unordered list: collect consecutive `- ` or `* ` lines
+    if (/^[-*] /.test(line)) {
+      const items: React.ReactNode[] = []
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        items.push(<li key={i} style={{ marginLeft: 16, color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem' }}>{parseInline(lines[i].slice(2), `li-${i}`)}</li>)
+        i++
+      }
+      nodes.push(<ul key={`ul-${i}`} style={{ listStyleType: 'disc', paddingLeft: 8, margin: '4px 0' }}>{items}</ul>)
+      continue
+    }
+
+    // Ordered list: collect consecutive `N. ` lines
+    if (/^\d+\. /.test(line)) {
+      const items: React.ReactNode[] = []
+      let num = 1
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        const content = lines[i].replace(/^\d+\. /, '')
+        items.push(<li key={i} style={{ marginLeft: 16, color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem' }}>{parseInline(content, `oli-${i}`)}</li>)
+        i++
+        num++
+      }
+      nodes.push(<ol key={`ol-${i}`} style={{ listStyleType: 'decimal', paddingLeft: 8, margin: '4px 0' }}>{items}</ol>)
+      continue
+    }
+
+    // Empty line → spacing
+    if (line.trim() === '') {
+      nodes.push(<br key={i} />)
+      i++
+      continue
+    }
+
+    // Regular paragraph line
+    nodes.push(
+      <p key={i} style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem', lineHeight: '1.6', margin: '2px 0' }}>
+        {parseInline(line, `p-${i}`)}
+      </p>
+    )
+    i++
+  }
+
+  return nodes
+}
+
 export default function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,8 +136,14 @@ export default function NotesPage() {
   const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ title: '', content: '', tags: '', color: '' })
+  const [previewMode, setPreviewMode] = useState(false)
 
   useEffect(() => { fetchNotes() }, [search])
+
+  // Reset preview mode when form closes or a different note is opened
+  useEffect(() => {
+    if (!showForm) setPreviewMode(false)
+  }, [showForm])
 
   async function fetchNotes() {
     setLoading(true)
@@ -74,6 +175,7 @@ export default function NotesPage() {
       setForm({ title: '', content: '', tags: '', color: '' })
       setShowForm(false)
       setEditingNote(null)
+      setPreviewMode(false)
       fetchNotes()
     } catch {
       toast.error('Failed to save note')
@@ -107,6 +209,7 @@ export default function NotesPage() {
   function startEditing(note: Note) {
     setEditingNote(note)
     setForm({ title: note.title, content: note.content, tags: note.tags || '', color: note.color || '' })
+    setPreviewMode(false)
     setShowForm(true)
   }
 
@@ -119,7 +222,7 @@ export default function NotesPage() {
           {/* Toolbar */}
           <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={() => { setEditingNote(null); setForm({ title: '', content: '', tags: '', color: '' }); setShowForm(!showForm) }}
+              onClick={() => { setEditingNote(null); setForm({ title: '', content: '', tags: '', color: '' }); setPreviewMode(false); setShowForm(!showForm) }}
               className="nexus-btn-primary flex items-center gap-2 text-sm"
             >
               <Plus size={16} />
@@ -140,9 +243,36 @@ export default function NotesPage() {
           {/* Form */}
           {showForm && (
             <div className="glass-panel rounded-2xl p-5">
-              <h3 className="text-white font-medium mb-4">
-                {editingNote ? 'Edit Note' : 'New Note'}
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-medium">
+                  {editingNote ? 'Edit Note' : 'New Note'}
+                </h3>
+                {/* Edit / Preview toggle */}
+                <div className="flex rounded-lg border border-white/10 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewMode(false)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 text-xs transition-all border-r border-white/10',
+                      !previewMode ? 'bg-cyan-400/20 text-cyan-400' : 'text-white/50 hover:text-white/70 hover:bg-white/5'
+                    )}
+                  >
+                    <Edit3 size={11} />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewMode(true)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 text-xs transition-all',
+                      previewMode ? 'bg-cyan-400/20 text-cyan-400' : 'text-white/50 hover:text-white/70 hover:bg-white/5'
+                    )}
+                  >
+                    <Eye size={11} />
+                    Preview
+                  </button>
+                </div>
+              </div>
               <form onSubmit={saveNote} className="space-y-3">
                 <input
                   type="text"
@@ -151,15 +281,35 @@ export default function NotesPage() {
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   required
                   className="nexus-input"
-                  autoFocus
+                  autoFocus={!previewMode}
                 />
-                <textarea
-                  placeholder="Note content..."
-                  value={form.content}
-                  onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                  rows={5}
-                  className="nexus-input resize-none"
-                />
+
+                {previewMode ? (
+                  /* Markdown preview panel */
+                  <div
+                    className="w-full min-h-[130px] rounded-lg p-4 overflow-auto"
+                    style={{
+                      background: 'rgba(10, 10, 26, 0.8)',
+                      border: '1px solid rgba(0, 212, 255, 0.15)',
+                      minHeight: 130,
+                    }}
+                  >
+                    {form.content.trim() === '' ? (
+                      <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.875rem' }}>Nothing to preview yet…</p>
+                    ) : (
+                      renderMarkdown(form.content)
+                    )}
+                  </div>
+                ) : (
+                  <textarea
+                    placeholder="Note content... (supports **bold**, *italic*, # headings, - lists, `code`)"
+                    value={form.content}
+                    onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                    rows={5}
+                    className="nexus-input resize-none"
+                  />
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
@@ -180,7 +330,7 @@ export default function NotesPage() {
                   <button type="submit" className="nexus-btn-primary flex-1 flex items-center justify-center gap-2">
                     <Save size={14} /> {editingNote ? 'Update Note' : 'Create Note'}
                   </button>
-                  <button type="button" onClick={() => { setShowForm(false); setEditingNote(null) }} className="nexus-btn-secondary px-4">
+                  <button type="button" onClick={() => { setShowForm(false); setEditingNote(null); setPreviewMode(false) }} className="nexus-btn-secondary px-4">
                     <X size={16} />
                   </button>
                 </div>

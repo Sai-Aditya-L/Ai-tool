@@ -14,6 +14,7 @@ const patchSchema = z.object({
   voiceEnabled: z.boolean().optional(),
   notificationsOn: z.boolean().optional(),
   timezone: z.string().max(100).optional(),
+  language: z.string().max(10).optional(),
   theme: z.string().max(50).optional(),
 })
 

@@ -423,11 +423,14 @@ function TaskRow({ task, onStatusChange, onDelete, onEdit, onTaskUpdate }: TaskR
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+type DueDateFilter = 'all' | 'overdue' | 'today' | 'this_week' | 'no_date'
+
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState({ status: 'pending', priority: '' })
+  const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('all')
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [form, setForm] = useState({ title: '', description: '', priority: 'medium', dueDate: '', tags: '' })
 
@@ -502,9 +505,28 @@ export default function TasksPage() {
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
   }
 
+  function applyDueDateFilter(taskList: Task[]): Task[] {
+    if (dueDateFilter === 'all') return taskList
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
+    const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+    return taskList.filter(t => {
+      if (dueDateFilter === 'no_date') return !t.dueDate
+      if (!t.dueDate) return false
+      const due = new Date(t.dueDate)
+      if (dueDateFilter === 'overdue') return due < now && t.status !== 'completed'
+      if (dueDateFilter === 'today') return due >= todayStart && due < todayEnd
+      if (dueDateFilter === 'this_week') return due >= todayStart && due < weekEnd
+      return true
+    })
+  }
+
+  const visibleTasks = applyDueDateFilter(tasks)
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <Header title="Tasks" subtitle={`${tasks.length} ${filter.status || 'total'} tasks`} />
+      <Header title="Tasks" subtitle={`${visibleTasks.length} ${filter.status || 'total'} tasks`} />
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-4">
 
@@ -544,6 +566,19 @@ export default function TasksPage() {
             >
               <option value="">All priorities</option>
               {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+
+            {/* Due date range filter */}
+            <select
+              value={dueDateFilter}
+              onChange={e => setDueDateFilter(e.target.value as DueDateFilter)}
+              className="nexus-input w-auto text-xs py-1.5 px-3"
+            >
+              <option value="all">All Dates</option>
+              <option value="overdue">Overdue</option>
+              <option value="today">Due Today</option>
+              <option value="this_week">Due This Week</option>
+              <option value="no_date">No Due Date</option>
             </select>
           </div>
 
@@ -608,7 +643,7 @@ export default function TasksPage() {
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
             </div>
-          ) : tasks.length === 0 ? (
+          ) : visibleTasks.length === 0 ? (
             <div className="text-center py-16 glass-panel rounded-2xl">
               <CheckSquare size={40} className="text-white/20 mx-auto mb-3" />
               <p className="text-white/40 font-medium">No tasks found</p>
@@ -616,7 +651,7 @@ export default function TasksPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {tasks.map(task => (
+              {visibleTasks.map(task => (
                 <TaskRow
                   key={task.id}
                   task={task}

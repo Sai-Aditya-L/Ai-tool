@@ -56,3 +56,36 @@ export async function DELETE(req: NextRequest) {
 
   return NextResponse.json({ success: true })
 }
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const body = await req.json()
+  const { id, deviceName } = body as { id?: string; deviceName?: string }
+
+  if (!id) {
+    return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  }
+
+  // Ensure the subscription belongs to the user
+  const subscription = await prisma.pushSubscription.findFirst({
+    where: { id, userId: user.id },
+  })
+
+  if (!subscription) {
+    return NextResponse.json({ error: 'Subscription not found' }, { status: 404 })
+  }
+
+  await prisma.pushSubscription.update({
+    where: { id },
+    data: { deviceName: deviceName ?? null },
+  })
+
+  return NextResponse.json({ success: true })
+}

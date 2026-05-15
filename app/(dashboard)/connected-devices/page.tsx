@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '@/components/layout/header'
 import {
-  Smartphone, Monitor, Tablet, Bell, BellOff, Trash2, Shield, Wifi,
+  Smartphone, Monitor, Tablet, Bell, BellOff, Trash2, Shield, Wifi, Pencil, Check, X,
 } from 'lucide-react'
 import { formatRelativeTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -39,6 +39,11 @@ export default function ConnectedDevicesPage() {
   const [removing, setRemoving] = useState<string | null>(null)
   const [permission, setPermission] = useState<PermissionStatus>('unsupported')
 
+  // Rename state
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [savingRename, setSavingRename] = useState(false)
+
   useEffect(() => {
     if ('Notification' in window) {
       setPermission(Notification.permission as PermissionStatus)
@@ -71,6 +76,38 @@ export default function ConnectedDevicesPage() {
       toast.error('Failed to remove device')
     } finally {
       setRemoving(null)
+    }
+  }
+
+  function startRename(sub: PushSubscription) {
+    setRenamingId(sub.id)
+    setRenameValue(sub.deviceName || '')
+  }
+
+  function cancelRename() {
+    setRenamingId(null)
+    setRenameValue('')
+  }
+
+  async function saveRename(id: string) {
+    setSavingRename(true)
+    try {
+      const res = await fetch('/api/push/subscriptions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, deviceName: renameValue }),
+      })
+      if (!res.ok) throw new Error()
+      setSubscriptions(prev =>
+        prev.map(s => s.id === id ? { ...s, deviceName: renameValue } : s)
+      )
+      toast.success('Device renamed')
+      setRenamingId(null)
+      setRenameValue('')
+    } catch {
+      toast.error('Failed to rename device')
+    } finally {
+      setSavingRename(false)
     }
   }
 
@@ -187,6 +224,7 @@ export default function ConnectedDevicesPage() {
               <div className="space-y-3">
                 {subscriptions.map(sub => {
                   const DeviceIcon = getDeviceIcon(sub.userAgent)
+                  const isRenaming = renamingId === sub.id
                   return (
                     <div key={sub.id} className="glass-panel-hover rounded-xl p-4 flex items-center gap-4">
                       <div className="w-10 h-10 rounded-lg border border-cyan-400/15 flex items-center justify-center flex-shrink-0"
@@ -194,9 +232,49 @@ export default function ConnectedDevicesPage() {
                         <DeviceIcon size={18} className="text-cyan-400/70" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-white/80 text-sm font-medium truncate">
-                          {sub.deviceName || 'Unknown Device'}
-                        </p>
+                        {isRenaming ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={renameValue}
+                              onChange={e => setRenameValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveRename(sub.id)
+                                if (e.key === 'Escape') cancelRename()
+                              }}
+                              className="nexus-input text-sm py-1 px-2 flex-1"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => saveRename(sub.id)}
+                              disabled={savingRename}
+                              className="text-green-400 hover:text-green-300 p-1 rounded transition-colors disabled:opacity-40"
+                              title="Save"
+                            >
+                              <Check size={14} />
+                            </button>
+                            <button
+                              onClick={cancelRename}
+                              className="text-white/30 hover:text-white/60 p-1 rounded transition-colors"
+                              title="Cancel"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <p className="text-white/80 text-sm font-medium truncate">
+                              {sub.deviceName || 'Unknown Device'}
+                            </p>
+                            <button
+                              onClick={() => startRename(sub)}
+                              className="text-white/20 hover:text-cyan-400 transition-colors p-1 rounded flex-shrink-0"
+                              title="Rename device"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                          </div>
+                        )}
                         <p className="text-white/35 text-xs truncate nexus-mono">
                           {getUASnippet(sub.userAgent)}
                         </p>
@@ -204,14 +282,16 @@ export default function ConnectedDevicesPage() {
                           Connected {formatRelativeTime(sub.createdAt)}
                         </p>
                       </div>
-                      <button
-                        onClick={() => removeDevice(sub.id)}
-                        disabled={removing === sub.id}
-                        className="text-white/20 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-400/5 flex-shrink-0 disabled:opacity-40"
-                        title="Remove device"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {!isRenaming && (
+                        <button
+                          onClick={() => removeDevice(sub.id)}
+                          disabled={removing === sub.id}
+                          className="text-white/20 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-400/5 flex-shrink-0 disabled:opacity-40"
+                          title="Remove device"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   )
                 })}

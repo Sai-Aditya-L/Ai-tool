@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { Header } from '@/components/layout/header'
-import { Settings, User, Bell, Shield, Brain, Cpu, Key, Save, Download, Trash2, Check } from 'lucide-react'
+import { User, Bell, Shield, Cpu, Key, Save, Download, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ── Toggle component ──────────────────────────────────────────────────────────
@@ -37,6 +37,7 @@ interface Preferences {
   voiceEnabled: boolean
   notificationsOn: boolean
   timezone: string
+  language: string
   theme: string
 }
 
@@ -59,6 +60,8 @@ export default function SettingsPage() {
   const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [voiceEnabled, setVoiceEnabled] = useState(false)
   const [timezone, setTimezone] = useState('UTC')
+  const [language, setLanguage] = useState('en')
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [savingAssistant, setSavingAssistant] = useState(false)
 
   // Notifications
@@ -93,6 +96,11 @@ export default function SettingsPage() {
           setVoiceEnabled(p.voiceEnabled ?? false)
           setNotificationsOn(p.notificationsOn ?? true)
           setTimezone(p.timezone ?? 'UTC')
+          setLanguage(p.language ?? 'en')
+          const savedTheme = (p.theme ?? 'dark') as 'dark' | 'light'
+          setTheme(savedTheme)
+          if (savedTheme === 'light') document.documentElement.classList.add('light-mode')
+          else document.documentElement.classList.remove('light-mode')
         }
       })
       .catch(() => toast.error('Failed to load settings'))
@@ -127,6 +135,8 @@ export default function SettingsPage() {
         memoryEnabled,
         voiceEnabled,
         timezone,
+        language,
+        theme,
       }
       const res = await fetch('/api/settings', {
         method: 'PATCH',
@@ -411,6 +421,46 @@ export default function SettingsPage() {
                         placeholder="UTC"
                         className="nexus-input"
                       />
+                    </div>
+
+                    <div>
+                      <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Language</label>
+                      <select value={language} onChange={e => setLanguage(e.target.value)} className="nexus-input">
+                        <option value="en">English</option>
+                        <option value="es">Spanish — Español</option>
+                        <option value="fr">French — Français</option>
+                        <option value="de">German — Deutsch</option>
+                        <option value="ja">Japanese — 日本語</option>
+                        <option value="zh">Chinese — 中文</option>
+                        <option value="pt">Portuguese — Português</option>
+                        <option value="hi">Hindi — हिन्दी</option>
+                        <option value="ar">Arabic — العربية</option>
+                        <option value="ko">Korean — 한국어</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Theme</label>
+                      <div className="flex rounded-lg border border-white/10 overflow-hidden w-fit">
+                        {(['dark', 'light'] as const).map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => {
+                              setTheme(t)
+                              if (t === 'light') document.documentElement.classList.add('light-mode')
+                              else document.documentElement.classList.remove('light-mode')
+                            }}
+                            className={`px-5 py-2 text-sm capitalize transition-all ${
+                              theme === t
+                                ? 'bg-cyan-400/20 text-cyan-400'
+                                : 'text-white/50 hover:text-white/70 hover:bg-white/5'
+                            } ${t === 'dark' ? 'border-r border-white/10' : ''}`}
+                          >
+                            {t === 'dark' ? '🌙 Dark' : '☀️ Light'}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Memory toggle */}

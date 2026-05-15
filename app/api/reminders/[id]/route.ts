@@ -19,6 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data: {
       ...body,
       dueAt: body.dueAt ? new Date(body.dueAt) : undefined,
+      snoozedUntil: body.snoozedUntil ? new Date(body.snoozedUntil) : undefined,
       completedAt: body.status === 'completed' ? new Date() : undefined,
     },
   })

@@ -262,3 +262,42 @@
   background-size: 200% 200%;
   animation: gradientShift 4s ease infinite;
 }
+
+/* Light mode overrides */
+.light-mode {
+  --background: #f0f4f8;
+  --foreground: #0a0a1a;
+}
+.light-mode body {
+  background: #f0f4f8 !important;
+  color: #0a0a1a !important;
+}
+.light-mode .glass-panel {
+  background: rgba(255, 255, 255, 0.75) !important;
+  border-color: rgba(0, 180, 220, 0.2) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08) !important;
+}
+.light-mode .nexus-input {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(0, 180, 220, 0.25) !important;
+  color: #0a0a1a !important;
+}
+.light-mode .nexus-input::placeholder {
+  color: rgba(10, 10, 26, 0.35) !important;
+}
+.light-mode .text-white\/80, .light-mode .text-white\/70 {
+  color: rgba(10, 10, 26, 0.85) !important;
+}
+.light-mode .text-white\/50, .light-mode .text-white\/40 {
+  color: rgba(10, 10, 26, 0.55) !important;
+}
+.light-mode .text-white\/30, .light-mode .text-white\/25 {
+  color: rgba(10, 10, 26, 0.35) !important;
+}
+.light-mode .bg-white\/3, .light-mode .bg-white\/5 {
+  background: rgba(10, 10, 26, 0.04) !important;
+}
+.light-mode aside, .light-mode header {
+  background: rgba(245, 248, 252, 0.97) !important;
+  border-color: rgba(0, 180, 220, 0.15) !important;
+}

@@ -74,13 +74,13 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ success: true, run: { ...run, output, status: 'completed' } })
+    return NextResponse.json({ success: true, message: output.slice(0, 120), run: { ...run, output, status: 'completed' } })
   } catch (error) {
     await prisma.automationRun.update({
       where: { id: run.id },
       data: { status: 'failed', error: String(error), completedAt: new Date() },
     })
-    return NextResponse.json({ error: 'Automation failed' }, { status: 500 })
+    return NextResponse.json({ error: 'Automation failed', message: 'Execution failed' }, { status: 500 })
   }
 }
 
