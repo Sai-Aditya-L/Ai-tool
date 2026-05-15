@@ -64,12 +64,12 @@ export function Sidebar() {
     <aside
       className={cn(
         'flex flex-col h-screen sticky top-0 transition-all duration-300 z-30',
-        'border-r border-cyan-400/10',
         collapsed ? 'w-16' : 'w-64'
       )}
       style={{
-        background: 'rgba(5, 5, 16, 0.95)',
-        backdropFilter: 'blur(20px)',
+        background: 'rgba(0, 4, 12, 0.95)',
+        borderRight: '1px solid rgba(0,229,255,0.12)',
+        boxShadow: '4px 0 30px rgba(0,0,0,0.5), inset -1px 0 0 rgba(0,229,255,0.05)',
       }}
     >
       {/* Logo */}
@@ -86,8 +86,8 @@ export function Sidebar() {
               </div>
             </div>
             <div>
-              <span className="font-bold text-sm nexus-text-gradient tracking-wider">NEXUS</span>
-              <div className="text-white/30 text-[10px] nexus-mono leading-none">v1.0 ONLINE</div>
+              <span className="font-bold text-sm tracking-[0.2em] hud-text-cyan hud-text-glow">NEXUS</span>
+              <div className="hud-label leading-none hud-blink" style={{fontSize:9,color:'rgba(0,229,255,0.5)'}}>v2.0 // ONLINE</div>
             </div>
           </Link>
         )}
@@ -114,7 +114,7 @@ export function Sidebar() {
         {navItems.map((group) => (
           <div key={group.group} className="mb-6">
             {!collapsed && (
-              <p className="text-white/25 text-[10px] uppercase tracking-[0.15em] px-3 mb-2 nexus-mono">
+              <p className="hud-label px-3 mb-2 opacity-40">
                 {group.group}
               </p>
             )}
