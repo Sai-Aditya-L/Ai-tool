@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   Zap,
   Activity,
+  Layers,
+  Send,
 } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -784,6 +786,183 @@ function CreateAgentForm({ initial, onClose, onCreated }: CreateFormProps) {
   )
 }
 
+// ─── Swarm Mode ────────────────────────────────────────────────────────────────
+
+interface SwarmResult {
+  agentName: string
+  result: string
+  runId: string
+}
+
+type SwarmPhase = 'idle' | 'analyzing' | 'deploying' | 'done' | 'error'
+
+function SwarmModePanel({ onClose }: { onClose: () => void }) {
+  const [query, setQuery] = useState('')
+  const [phase, setPhase] = useState<SwarmPhase>('idle')
+  const [agents, setAgents] = useState<string[]>([])
+  const [results, setResults] = useState<SwarmResult[]>([])
+  const [errorMsg, setErrorMsg] = useState('')
+
+  async function handleDeploy() {
+    if (!query.trim()) return
+    setPhase('analyzing')
+    setAgents([])
+    setResults([])
+    setErrorMsg('')
+
+    try {
+      setPhase('deploying')
+      const res = await fetch('/api/agents/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Orchestration failed')
+      }
+      const data = await res.json()
+      if (!data.orchestrated) {
+        setErrorMsg('Query did not require multi-agent orchestration. Try a more complex, multi-domain query.')
+        setPhase('error')
+        return
+      }
+      setAgents(data.agents ?? [])
+      setResults(data.results ?? [])
+      setPhase('done')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Swarm deployment failed')
+      setPhase('error')
+    }
+  }
+
+  function handleReset() {
+    setPhase('idle')
+    setQuery('')
+    setAgents([])
+    setResults([])
+    setErrorMsg('')
+  }
+
+  const statusLabel: Record<SwarmPhase, string> = {
+    idle:      '',
+    analyzing: 'Analyzing query…',
+    deploying: agents.length > 0 ? `Deploying ${agents.join(', ')}…` : 'Deploying agents…',
+    done:      `Swarm complete — ${results.length} agent${results.length !== 1 ? 's' : ''} responded`,
+    error:     errorMsg,
+  }
+
+  return (
+    <div className="glass-panel rounded-2xl p-5 border border-violet-400/20">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-white font-semibold flex items-center gap-2">
+          <Layers size={15} className="text-violet-400" />
+          SWARM MODE
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-400/10 border border-violet-400/20 text-violet-400 font-normal">
+            Multi-Agent
+          </span>
+        </h3>
+        <button onClick={onClose} className="text-white/30 hover:text-white/70 transition-colors">
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Input */}
+      <div className="space-y-3">
+        <textarea
+          rows={3}
+          placeholder="Enter a complex, multi-domain query to deploy a swarm of specialized agents… (e.g. 'Plan a trip to Tokyo next month, book a meeting with my team, and summarize my finances')"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          disabled={phase === 'analyzing' || phase === 'deploying'}
+          className="nexus-input resize-none w-full"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDeploy}
+            disabled={!query.trim() || phase === 'analyzing' || phase === 'deploying'}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-400/30 bg-violet-400/10 text-violet-400 text-sm font-medium hover:bg-violet-400/20 hover:border-violet-400/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {(phase === 'analyzing' || phase === 'deploying') ? (
+              <>
+                <Loader2 size={13} className="animate-spin" />
+                {phase === 'analyzing' ? 'Analyzing…' : 'Deploying…'}
+              </>
+            ) : (
+              <>
+                <Send size={13} />
+                DEPLOY SWARM
+              </>
+            )}
+          </button>
+          {(phase === 'done' || phase === 'error') && (
+            <button onClick={handleReset} className="nexus-btn-secondary text-xs px-3 py-2">
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Status bar */}
+      {phase !== 'idle' && (
+        <div className={cn(
+          'mt-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2',
+          phase === 'error'
+            ? 'bg-red-400/10 border border-red-400/20 text-red-400'
+            : phase === 'done'
+            ? 'bg-green-400/10 border border-green-400/20 text-green-400'
+            : 'bg-violet-400/10 border border-violet-400/20 text-violet-300'
+        )}>
+          {(phase === 'analyzing' || phase === 'deploying') && (
+            <Loader2 size={11} className="animate-spin flex-shrink-0" />
+          )}
+          {statusLabel[phase]}
+        </div>
+      )}
+
+      {/* Agent badges while deploying */}
+      {phase === 'deploying' && agents.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {agents.map(name => (
+            <span
+              key={name}
+              className="text-[10px] px-2 py-0.5 rounded-full border border-violet-400/20 bg-violet-400/8 text-violet-300 flex items-center gap-1"
+            >
+              <Loader2 size={9} className="animate-spin" />
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Results */}
+      {phase === 'done' && results.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <p className="text-white/40 text-[10px] uppercase tracking-widest">Agent Results</p>
+          {results.map(r => (
+            <div key={r.agentName} className="glass-panel rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-violet-300">{r.agentName}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-green-400/20 bg-green-400/10 text-green-400">
+                  completed
+                </span>
+                {r.runId && (
+                  <span className="text-[10px] text-white/20 nexus-mono ml-auto">
+                    run:{r.runId.slice(0, 8)}
+                  </span>
+                )}
+              </div>
+              <p className="text-white/65 text-xs leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto">
+                {r.result}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AgentsPage() {
@@ -794,6 +973,7 @@ export default function AgentsPage() {
   const [runTaskAgent, setRunTaskAgent] = useState<Agent | null>(null)
   const [runRefreshTrigger, setRunRefreshTrigger] = useState(0)
   const [showPresets, setShowPresets] = useState(true)
+  const [showSwarm, setShowSwarm] = useState(false)
 
   useEffect(() => {
     fetchAgents()
@@ -888,14 +1068,34 @@ export default function AgentsPage() {
               <span className="text-white/20 text-xs nexus-mono">{agents.length} deployed</span>
             </div>
 
-            <button
-              onClick={handleOpenCreateForm}
-              className="nexus-btn-primary flex items-center gap-2 text-sm"
-            >
-              <Plus size={15} />
-              Deploy Agent
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSwarm(v => !v)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all',
+                  showSwarm
+                    ? 'border-violet-400/40 bg-violet-400/10 text-violet-400'
+                    : 'border-violet-400/20 text-violet-400/60 hover:text-violet-400 hover:border-violet-400/35 hover:bg-violet-400/5'
+                )}
+              >
+                <Layers size={13} />
+                SWARM MODE
+              </button>
+
+              <button
+                onClick={handleOpenCreateForm}
+                className="nexus-btn-primary flex items-center gap-2 text-sm"
+              >
+                <Plus size={15} />
+                Deploy Agent
+              </button>
+            </div>
           </div>
+
+          {/* ── Swarm Mode Panel ── */}
+          {showSwarm && (
+            <SwarmModePanel onClose={() => setShowSwarm(false)} />
+          )}
 
           {/* ── Preset Grid ── */}
           {showPresets && (

@@ -14,6 +14,18 @@ import {
 } from '@/lib/google'
 import { getGitHubClient, listRepos, isGitHubConnected } from '@/lib/github'
 import Anthropic from '@anthropic-ai/sdk'
+import { orchestrate } from '@/app/api/agents/orchestrate/route'
+
+// ---------------------------------------------------------------------------
+// Orchestration helper — calls orchestrate logic directly (no HTTP round-trip)
+// ---------------------------------------------------------------------------
+async function detectOrchestration(query: string, userId: string) {
+  try {
+    return await orchestrate(query, userId)
+  } catch {
+    return null
+  }
+}
 
 async function executeToolCall(
   toolName: string,
@@ -613,6 +625,48 @@ export async function POST(req: NextRequest) {
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Invalid messages' }, { status: 400 })
     }
+
+    // ── Orchestration detection ──────────────────────────────────────────────
+    // Extract the latest user message and check if multi-agent handling is needed.
+    const latestUserMsg = messages.filter((m: { role: string }) => m.role === 'user').pop()
+    const latestQuery: string = latestUserMsg?.text || latestUserMsg?.content || ''
+
+    if (latestQuery.trim().length > 20) {
+      const orchResult = await detectOrchestration(latestQuery.trim(), user.id)
+      if (orchResult?.orchestrated && orchResult.agents.length > 0) {
+        // Build orchestration response
+        const orchestratingChunk = JSON.stringify({
+          type: 'orchestrating',
+          agents: orchResult.agents,
+        })
+
+        const responseText = `${orchestratingChunk}\n\n${orchResult.merged}`
+
+        // Persist conversation + messages
+        let convId = conversationId
+        if (!convId) {
+          const newConv = await prisma.conversation.create({
+            data: { userId: user.id, title: latestQuery.substring(0, 60) },
+          })
+          convId = newConv.id
+        }
+        await prisma.message.create({
+          data: { conversationId: convId, role: 'user', content: latestQuery },
+        })
+        await prisma.message.create({
+          data: { conversationId: convId, role: 'assistant', content: orchResult.merged },
+        })
+
+        return NextResponse.json({
+          message: responseText,
+          conversationId: convId,
+          toolsUsed: [],
+          orchestrated: true,
+          agents: orchResult.agents,
+        })
+      }
+    }
+    // ── End orchestration detection ──────────────────────────────────────────
 
     // Get or create conversation
     let conversation
