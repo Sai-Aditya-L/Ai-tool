@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '@/components/layout/header'
-import { Zap, Plus, Play, Pause, Trash2, Clock, ArrowRight, X, Loader2 } from 'lucide-react'
+import { Zap, Plus, Play, Pause, Trash2, Clock, ArrowRight, X, Loader2, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Automation {
@@ -115,6 +115,8 @@ export default function AutomationsPage() {
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [running, setRunning] = useState<string | null>(null)
+  const [runResult, setRunResult] = useState<{ id: string; success: boolean; message: string } | null>(null)
 
   const fetchAutomations = useCallback(async () => {
     try {

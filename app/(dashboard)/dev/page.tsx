@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
 import {
   Code,
@@ -12,13 +12,16 @@ import {
   Check,
   Loader2,
   Zap,
+  GitBranch,
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'code_review' | 'pr_summary' | 'commit_message' | 'doc_generator' | 'architecture_advisor'
+type TabId = 'code_review' | 'pr_summary' | 'commit_message' | 'doc_generator' | 'architecture_advisor' | 'github'
 
 interface Tab {
   id: TabId
@@ -32,6 +35,7 @@ const TABS: Tab[] = [
   { id: 'commit_message', label: 'Commit Message', icon: <GitCommit size={15} /> },
   { id: 'doc_generator', label: 'Doc Generator', icon: <FileText size={15} /> },
   { id: 'architecture_advisor', label: 'Architecture Advisor', icon: <Layout size={15} /> },
+  { id: 'github', label: 'GitHub', icon: <GitBranch size={15} /> },
 ]
 
 const LANGUAGES = ['auto-detect', 'JavaScript', 'TypeScript', 'Python', 'Go', 'Rust', 'Java', 'C++', 'Other']
@@ -612,6 +616,255 @@ function ArchitectureAdvisorTab() {
   )
 }
 
+// ─── Tab 6: GitHub ───────────────────────────────────────────────────────────
+
+interface GitHubRepo {
+  name: string
+  full_name: string
+  description: string | null
+  stargazers_count: number
+  language: string | null
+  updated_at: string
+}
+
+interface GitHubPR {
+  number: number
+  title: string
+  user: { login: string }
+  head: { ref: string }
+  html_url: string
+}
+
+function GitHubTab() {
+  const [connected, setConnected] = useState<boolean | null>(null)
+  const [repos, setRepos] = useState<GitHubRepo[]>([])
+  const [selectedRepo, setSelectedRepo] = useState('')
+  const [prs, setPRs] = useState<GitHubPR[]>([])
+  const [loadingRepos, setLoadingRepos] = useState(false)
+  const [loadingPRs, setLoadingPRs] = useState(false)
+  const [reviewResult, setReviewResult] = useState('')
+  const [reviewingPR, setReviewingPR] = useState<number | null>(null)
+  const [commitResult, setCommitResult] = useState('')
+  const [loadingCommits, setLoadingCommits] = useState(false)
+
+  useEffect(() => {
+    fetchStatus()
+  }, [])
+
+  async function fetchStatus() {
+    setLoadingRepos(true)
+    try {
+      const res = await fetch('/api/dev/github')
+      const data = await res.json()
+      setConnected(data.connected)
+      setRepos(data.repos || [])
+    } catch {
+      setConnected(false)
+    } finally {
+      setLoadingRepos(false)
+    }
+  }
+
+  async function fetchPRs(repoFullName: string) {
+    setSelectedRepo(repoFullName)
+    setPRs([])
+    setReviewResult('')
+    setCommitResult('')
+    if (!repoFullName) return
+    setLoadingPRs(true)
+    try {
+      const res = await fetch(`/api/dev/github/prs?repo=${encodeURIComponent(repoFullName)}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load PRs')
+      setPRs(data.prs || [])
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load PRs')
+    } finally {
+      setLoadingPRs(false)
+    }
+  }
+
+  async function reviewPR(pr: GitHubPR) {
+    setReviewingPR(pr.number)
+    setReviewResult('')
+    try {
+      const res = await fetch('/api/dev/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'pr_review',
+          input: { prTitle: pr.title, prNumber: String(pr.number), repo: selectedRepo },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Review failed')
+      setReviewResult(data.result)
+    } catch (err: any) {
+      toast.error(err.message || 'PR review failed')
+    } finally {
+      setReviewingPR(null)
+    }
+  }
+
+  async function listCommits() {
+    if (!selectedRepo) { toast.error('Select a repository first'); return }
+    setLoadingCommits(true)
+    setCommitResult('')
+    try {
+      const res = await fetch('/api/dev/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'commit_summary',
+          input: { repo: selectedRepo },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      setCommitResult(data.result)
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load commits')
+    } finally {
+      setLoadingCommits(false)
+    }
+  }
+
+  if (connected === null || loadingRepos) {
+    return (
+      <div className="flex items-center justify-center py-24 gap-3">
+        <Loader2 size={18} className="text-cyan-400 animate-spin" />
+        <span className="text-white/40 text-sm">Checking GitHub connection...</span>
+      </div>
+    )
+  }
+
+  if (!connected) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-white/3 border border-cyan-400/10 flex items-center justify-center">
+          <GitBranch size={24} className="text-white/20" />
+        </div>
+        <div className="text-center">
+          <p className="text-white/70 font-medium">GitHub not connected</p>
+          <p className="text-white/30 text-sm mt-1">Connect your GitHub account to view repos and PRs</p>
+        </div>
+        <a
+          href="/api/integrations/github/auth"
+          className="nexus-btn-primary flex items-center gap-2 px-6 py-2.5"
+        >
+          <GitBranch size={15} />
+          Connect GitHub
+        </a>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+      {/* Left panel */}
+      <div className="flex flex-col gap-3">
+        {/* Repo selector */}
+        <div className="glass-panel rounded-2xl p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <label className="text-white/60 text-xs uppercase tracking-wider nexus-mono">Repository</label>
+            <button
+              onClick={fetchStatus}
+              className="flex items-center gap-1 text-white/30 hover:text-cyan-400 transition-colors text-xs"
+            >
+              <RefreshCw size={11} />
+              Refresh
+            </button>
+          </div>
+          <select
+            value={selectedRepo}
+            onChange={e => fetchPRs(e.target.value)}
+            className="nexus-input"
+          >
+            <option value="">Select a repository...</option>
+            {repos.map(r => (
+              <option key={r.full_name} value={r.full_name}>
+                {r.full_name} {r.language ? `(${r.language})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* PR List */}
+        {selectedRepo && (
+          <div className="glass-panel rounded-2xl p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <label className="text-white/60 text-xs uppercase tracking-wider nexus-mono">Open Pull Requests</label>
+              <button
+                onClick={listCommits}
+                disabled={loadingCommits}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-400/20 text-white/50 hover:text-cyan-400 hover:border-cyan-400/40 hover:bg-cyan-400/5 transition-all text-xs disabled:opacity-40"
+              >
+                {loadingCommits ? <Loader2 size={11} className="animate-spin" /> : <GitCommit size={11} />}
+                List Commits
+              </button>
+            </div>
+
+            {loadingPRs ? (
+              <div className="flex items-center gap-2 py-4 justify-center">
+                <Loader2 size={15} className="text-cyan-400 animate-spin" />
+                <span className="text-white/40 text-sm">Loading PRs...</span>
+              </div>
+            ) : prs.length === 0 ? (
+              <p className="text-white/30 text-sm text-center py-4">No open pull requests</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {prs.map(pr => (
+                  <div
+                    key={pr.number}
+                    className="flex items-start justify-between gap-3 p-3 rounded-xl bg-white/3 border border-white/5 hover:border-cyan-400/20 transition-all"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white/30 text-xs nexus-mono">#{pr.number}</span>
+                        <p className="text-white/80 text-sm font-medium truncate">{pr.title}</p>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-white/30 text-xs">{pr.user.login}</span>
+                        <span className="text-cyan-400/50 text-xs nexus-mono">{pr.head.ref}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <a
+                        href={pr.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg border border-white/10 text-white/30 hover:text-cyan-400 hover:border-cyan-400/30 transition-all"
+                        title="Open on GitHub"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                      <button
+                        onClick={() => reviewPR(pr)}
+                        disabled={reviewingPR === pr.number}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-400/20 text-white/50 hover:text-cyan-400 hover:border-cyan-400/40 hover:bg-cyan-400/5 transition-all text-xs disabled:opacity-40"
+                      >
+                        {reviewingPR === pr.number ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />}
+                        Review PR
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Right panel — AI output */}
+      <ResultPanel
+        result={reviewResult || commitResult}
+        loading={reviewingPR !== null || loadingCommits}
+        placeholder="Select a repo, then click Review PR or List Commits to get AI analysis."
+      />
+    </div>
+  )
+}
+
 // ─── Tab content map ─────────────────────────────────────────────────────────
 
 const TAB_CONTENT: Record<TabId, React.ReactNode> = {
@@ -620,6 +873,7 @@ const TAB_CONTENT: Record<TabId, React.ReactNode> = {
   commit_message: <CommitMessageTab />,
   doc_generator: <DocGeneratorTab />,
   architecture_advisor: <ArchitectureAdvisorTab />,
+  github: <GitHubTab />,
 }
 
 // ─── Main Page ───────────────────────────────────────────────────────────────

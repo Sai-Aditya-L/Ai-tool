@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { formatDate, formatRelativeTime } from '@/lib/utils'
 import Link from 'next/link'
-import { CheckSquare, Bell, Activity, BarChart2, ChevronRight, Check, Clock, Mail, Layers, Bot } from 'lucide-react'
+import { CheckSquare, Bell, Activity, BarChart2, ChevronRight, Check, Clock, Mail, Layers, Bot, Calendar } from 'lucide-react'
 
 interface DashboardClientProps {
   initialData: {
@@ -12,6 +12,7 @@ interface DashboardClientProps {
       completedToday: number
       todayRemindersCount: number
       unreadNotifications: number
+      unreadEmailCount: number
     }
     data: {
       todayReminders: any[]
@@ -22,6 +23,7 @@ interface DashboardClientProps {
       trackers: any[]
       recentFiles: any[]
       agentRuns: any[]
+      todayEvents: any[]
     }
   }
   userId: string
@@ -247,6 +249,34 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                 }`}>
                   {run.status}
                 </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Today's Schedule Widget */}
+      <div className="glass-panel-hover rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Calendar size={14} className="text-blue-400" />
+            <h3 className="text-white/70 text-sm font-medium">Today&apos;s Schedule</h3>
+          </div>
+          <Link href="/calendar" className="text-cyan-400/50 text-xs hover:text-cyan-400 flex items-center gap-1 transition-colors">
+            View all <ChevronRight size={12} />
+          </Link>
+        </div>
+        {data.todayEvents.length === 0 ? (
+          <p className="text-white/30 text-sm text-center py-4">Nothing scheduled today</p>
+        ) : (
+          <ul className="space-y-2">
+            {data.todayEvents.map((event: any) => (
+              <li key={event.id} className="flex items-center gap-3">
+                <div className="w-1 h-8 bg-blue-400/40 rounded-full flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-white/80">{event.title}</p>
+                  <p className="text-white/30 text-xs">{formatDate(event.dueAt)}</p>
+                </div>
               </li>
             ))}
           </ul>

@@ -30,7 +30,8 @@ const ALL_INTEGRATIONS = [
     icon: '⚫',
     description: 'Repositories, PRs, issues',
     features: ['Repo summary', 'PR notifications', 'Issue tracking'],
-    phase: 3,
+    phase: 2,
+    connectPath: '/api/integrations/github/auth',
     category: 'development',
   },
   {
@@ -150,7 +151,9 @@ export default function IntegrationsPage() {
     const success = searchParams.get('success')
     const error = searchParams.get('error')
     if (success === 'google_connected') toast.success('Google account connected successfully!')
+    if (success === 'github_connected') toast.success('GitHub account connected successfully!')
     if (error === 'google_denied') toast.error('Google authorization was denied')
+    if (error === 'github_denied') toast.error('GitHub authorization was denied')
     if (error === 'oauth_failed') toast.error('OAuth connection failed. Try again.')
     fetchStatuses()
   }, [])

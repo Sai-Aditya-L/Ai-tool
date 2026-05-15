@@ -31,6 +31,9 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
 interface Preferences {
   assistantName: string
   aiModel: string
+  aiProvider: string
+  openaiModel: string
+  memoryEnabled: boolean
   voiceEnabled: boolean
   notificationsOn: boolean
   timezone: string
@@ -50,6 +53,10 @@ export default function SettingsPage() {
   // Assistant
   const [assistantName, setAssistantName] = useState('NEXUS')
   const [aiModel, setAiModel] = useState('claude-sonnet-4-6')
+  const [aiProvider, setAiProvider] = useState<'anthropic' | 'openai'>('anthropic')
+  const [openaiModel, setOpenaiModel] = useState('gpt-4o')
+  const [openaiKey, setOpenaiKey] = useState('')
+  const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [voiceEnabled, setVoiceEnabled] = useState(false)
   const [timezone, setTimezone] = useState('UTC')
   const [savingAssistant, setSavingAssistant] = useState(false)
@@ -80,6 +87,9 @@ export default function SettingsPage() {
           const p: Preferences = data.preferences
           setAssistantName(p.assistantName ?? 'NEXUS')
           setAiModel(p.aiModel ?? 'claude-sonnet-4-6')
+          setAiProvider((p.aiProvider as 'anthropic' | 'openai') ?? 'anthropic')
+          setOpenaiModel(p.openaiModel ?? 'gpt-4o')
+          setMemoryEnabled(p.memoryEnabled ?? true)
           setVoiceEnabled(p.voiceEnabled ?? false)
           setNotificationsOn(p.notificationsOn ?? true)
           setTimezone(p.timezone ?? 'UTC')
@@ -109,10 +119,19 @@ export default function SettingsPage() {
   async function saveAssistant() {
     setSavingAssistant(true)
     try {
+      const body: Record<string, unknown> = {
+        assistantName,
+        aiModel,
+        aiProvider,
+        openaiModel,
+        memoryEnabled,
+        voiceEnabled,
+        timezone,
+      }
       const res = await fetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assistantName, aiModel, voiceEnabled, timezone }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error('Failed')
       toast.success('Assistant configuration saved')
@@ -307,18 +326,82 @@ export default function SettingsPage() {
                         className="nexus-input"
                       />
                     </div>
+
+                    {/* AI Provider toggle */}
                     <div>
-                      <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">AI Model</label>
-                      <select
-                        value={aiModel}
-                        onChange={e => setAiModel(e.target.value)}
-                        className="nexus-input"
-                      >
-                        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Recommended)</option>
-                        <option value="claude-opus-4-7">Claude Opus 4.7 (Most Capable)</option>
-                        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Fastest)</option>
-                      </select>
+                      <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">AI Provider</label>
+                      <div className="flex rounded-lg border border-white/10 overflow-hidden w-fit">
+                        <button
+                          type="button"
+                          onClick={() => setAiProvider('anthropic')}
+                          className={`px-4 py-2 text-sm transition-all ${
+                            aiProvider === 'anthropic'
+                              ? 'bg-cyan-400/20 text-cyan-400 border-r border-cyan-400/30'
+                              : 'text-white/50 hover:text-white/70 hover:bg-white/5 border-r border-white/10'
+                          }`}
+                        >
+                          Anthropic
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAiProvider('openai')}
+                          className={`px-4 py-2 text-sm transition-all ${
+                            aiProvider === 'openai'
+                              ? 'bg-cyan-400/20 text-cyan-400'
+                              : 'text-white/50 hover:text-white/70 hover:bg-white/5'
+                          }`}
+                        >
+                          OpenAI
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Anthropic model select */}
+                    {aiProvider === 'anthropic' && (
+                      <div>
+                        <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">AI Model</label>
+                        <select
+                          value={aiModel}
+                          onChange={e => setAiModel(e.target.value)}
+                          className="nexus-input"
+                        >
+                          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Recommended)</option>
+                          <option value="claude-opus-4-7">Claude Opus 4.7 (Most Capable)</option>
+                          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Fastest)</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* OpenAI fields */}
+                    {aiProvider === 'openai' && (
+                      <>
+                        <div>
+                          <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">OpenAI Model</label>
+                          <select
+                            value={openaiModel}
+                            onChange={e => setOpenaiModel(e.target.value)}
+                            className="nexus-input"
+                          >
+                            <option value="gpt-4o">GPT-4o (Recommended)</option>
+                            <option value="gpt-4o-mini">GPT-4o Mini (Faster)</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Fastest)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">OpenAI API Key</label>
+                          <input
+                            type="password"
+                            value={openaiKey}
+                            onChange={e => setOpenaiKey(e.target.value)}
+                            placeholder="sk-..."
+                            className="nexus-input"
+                          />
+                          <p className="text-white/30 text-xs mt-1">Stored securely. Leave blank to use server-side OPENAI_API_KEY.</p>
+                        </div>
+                      </>
+                    )}
+
                     <div>
                       <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Timezone</label>
                       <input
@@ -329,6 +412,16 @@ export default function SettingsPage() {
                         className="nexus-input"
                       />
                     </div>
+
+                    {/* Memory toggle */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border border-white/5">
+                      <div>
+                        <p className="text-white/70 text-sm">Memory System</p>
+                        <p className="text-white/35 text-xs">Allow NEXUS to remember preferences and context</p>
+                      </div>
+                      <Toggle enabled={memoryEnabled} onChange={setMemoryEnabled} />
+                    </div>
+
                     <div className="flex items-center justify-between p-3 rounded-lg border border-white/5">
                       <div>
                         <p className="text-white/70 text-sm">Voice Commands</p>

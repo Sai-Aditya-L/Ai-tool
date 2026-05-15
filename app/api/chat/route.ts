@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { anthropic, NEXUS_SYSTEM_PROMPT, NEXUS_TOOLS } from '@/lib/anthropic'
+import { createMessage, buildToolResultMessages, AIProvider } from '@/lib/ai-provider'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 import {
   listEmails,
   createDraft,
@@ -10,6 +12,7 @@ import {
   createCalendarEvent,
   isGoogleConnected,
 } from '@/lib/google'
+import { getGitHubClient, listRepos, isGitHubConnected } from '@/lib/github'
 import Anthropic from '@anthropic-ai/sdk'
 
 async function executeToolCall(
@@ -144,6 +147,10 @@ async function executeToolCall(
       }
 
       case 'save_memory': {
+        const memPrefs = await prisma.userPreferences.findUnique({ where: { userId } })
+        if (memPrefs?.memoryEnabled === false) {
+          return JSON.stringify({ skipped: true, reason: 'Memory is disabled in settings' })
+        }
         const memory = await prisma.memory.upsert({
           where: { userId_key: { userId, key: toolInput.key as string } },
           update: { value: toolInput.value as string, category: toolInput.category as string },
@@ -435,6 +442,73 @@ async function executeToolCall(
         return JSON.stringify({ success: true, review })
       }
 
+      case 'run_automation': {
+        const auto = await prisma.automation.findFirst({
+          where: { userId, name: { contains: toolInput.automationName as string } }
+        })
+        if (!auto) return JSON.stringify({ error: `Automation "${toolInput.automationName}" not found.` })
+        const run = await prisma.automationRun.create({
+          data: { automationId: auto.id, userId, status: 'running', startedAt: new Date() }
+        })
+        // Trigger async (fire and forget) — user can check status in Automations page
+        return JSON.stringify({ success: true, message: `Automation "${auto.name}" triggered. Run ID: ${run.id}. Check the Automations page for results.` })
+      }
+
+      case 'summarize_meeting': {
+        const meetingResult = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2048,
+          system: 'You are a professional meeting summarizer. Create a concise meeting summary with: ## Summary (2-3 sentences), ## Key Decisions (bullet points), ## Action Items (bullet points with owner if mentioned), ## Next Steps.',
+          messages: [{ role: 'user', content: `Title: ${toolInput.title || 'Meeting'}\n\nTranscript/Notes:\n${(toolInput.transcript as string).substring(0, 8000)}` }],
+        })
+        const summary = meetingResult.content.find(b => b.type === 'text')?.text || ''
+
+        if (toolInput.saveNote === 'true' && summary) {
+          await prisma.note.create({
+            data: {
+              userId,
+              title: `Meeting: ${toolInput.title || new Date().toLocaleDateString()}`,
+              content: summary,
+              tags: 'meeting,summary',
+            }
+          })
+        }
+        return JSON.stringify({ success: true, summary, saved: toolInput.saveNote === 'true' })
+      }
+
+      case 'review_pull_request': {
+        const prReview = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2048,
+          system: 'You are Forge, an expert code reviewer. Review this PR for: code quality, security vulnerabilities, performance, breaking changes, and missing tests. Use ## sections: Overview, Issues Found, Security, Suggestions, Verdict (Approve/Request Changes).',
+          messages: [{ role: 'user', content: `PR Title: ${toolInput.title || 'Unknown'}\nDescription: ${toolInput.description || 'None'}\n\nDiff:\n${(toolInput.diff as string).substring(0, 8000)}` }],
+        })
+        const review = prReview.content.find(b => b.type === 'text')?.text || ''
+        return JSON.stringify({ success: true, review })
+      }
+
+      case 'trigger_workflow': {
+        const workflowSteps: Record<string, string[]> = {
+          morning_briefing: ['summarize_day', 'get_tasks (status: pending)', 'get_reminders', 'get_dashboard_summary'],
+          end_of_day: ['get_tasks (completed today)', 'summarize_day', 'create_reminder for tomorrow'],
+          weekly_review: ['get_tasks (all statuses)', 'get_reminders', 'get_memory'],
+          project_kickoff: ['create_task (project setup)', 'save_memory (project context)'],
+          inbox_zero: ['get_emails', 'summarize_emails'],
+        }
+        const steps = workflowSteps[toolInput.workflow as string] || (toolInput.customSteps as string || '').split(',')
+        return JSON.stringify({ success: true, workflow: toolInput.workflow, steps, message: `Workflow "${toolInput.workflow}" initiated. Steps: ${steps.join(' → ')}. I'll execute each step now.` })
+      }
+
+      case 'get_github_repos': {
+        const connected = await isGitHubConnected(userId)
+        if (!connected) return JSON.stringify({ error: 'GitHub not connected. Connect it from the Integrations page.' })
+        const token = await getGitHubClient(userId)
+        if (!token) return JSON.stringify({ error: 'GitHub token not found.' })
+        const repos = await listRepos(token as string)
+        const limit = toolInput.limit ? parseInt(toolInput.limit as string) : 10
+        return JSON.stringify({ repos: (repos as any[]).slice(0, limit).map((r: any) => ({ name: r.name, fullName: r.full_name, description: r.description, stars: r.stargazers_count, language: r.language, updatedAt: r.updated_at })) })
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` })
     }
@@ -454,6 +528,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
+
+  const rl = rateLimit(`chat:${session.user.email}`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   try {
     const { messages, conversationId } = await req.json()
@@ -478,12 +555,18 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Build context from recent memory
-    const memories = await prisma.memory.findMany({
-      where: { userId: user.id },
-      orderBy: { updatedAt: 'desc' },
-      take: 10,
-    })
+    // Resolve provider and model from user preferences (also used for memoryEnabled check)
+    const prefs = await prisma.userPreferences.findUnique({ where: { userId: user.id } })
+    const memoryEnabled = prefs?.memoryEnabled !== false
+
+    // Build context from recent memory (only if memory is enabled)
+    const memories = memoryEnabled
+      ? await prisma.memory.findMany({
+          where: { userId: user.id },
+          orderBy: { updatedAt: 'desc' },
+          take: 10,
+        })
+      : []
 
     const memoryContext = memories.length > 0
       ? `\n\nKnown user context from memory:\n${memories.map(m => `- ${m.category}/${m.key}: ${m.value}`).join('\n')}`
@@ -491,16 +574,22 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = NEXUS_SYSTEM_PROMPT + memoryContext + `\n\nCurrent user: ${user.name || user.email}\nCurrent time: ${new Date().toISOString()}`
 
-    // Format messages for Claude
-    const claudeMessages: Anthropic.MessageParam[] = messages.map((m: { role: string; content: string }) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }))
+    const provider = (prefs?.aiProvider || 'anthropic') as AIProvider
+    const model = provider === 'openai'
+      ? (prefs?.openaiModel || 'gpt-4o')
+      : (prefs?.aiModel || 'claude-sonnet-4-6')
 
-    // Agentic loop with tool calling
-    let response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+    // Format messages for the agentic loop
+    const claudeMessages: Array<{ role: 'user' | 'assistant'; content: string }> =
+      messages.map((m: { role: string; content: string }) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }))
+
+    // Agentic loop with tool calling — unified across providers
+    let response = await createMessage({
+      provider,
+      model,
       system: systemPrompt,
       tools: NEXUS_TOOLS,
       messages: claudeMessages,
@@ -511,37 +600,31 @@ export async function POST(req: NextRequest) {
     let iterations = 0
     const maxIterations = 5
 
-    while (response.stop_reason === 'tool_use' && iterations < maxIterations) {
+    while (response.stopReason === 'tool_use' && iterations < maxIterations) {
       iterations++
-      const toolUseBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
-      const toolResults: Anthropic.MessageParam = {
-        role: 'user',
-        content: await Promise.all(
-          toolUseBlocks.map(async (toolUse) => {
-            const result = await executeToolCall(toolUse.name, toolUse.input as Record<string, unknown>, user.id)
-            toolCallsLog.push({ name: toolUse.name, result })
-            return {
-              type: 'tool_result' as const,
-              tool_use_id: toolUse.id,
-              content: result,
-            }
-          })
-        ),
-      }
+
+      const results = await Promise.all(
+        response.toolCalls.map(async (toolCall) => {
+          const result = await executeToolCall(toolCall.name, toolCall.input, user.id)
+          toolCallsLog.push({ name: toolCall.name, result })
+          return { id: toolCall.id, content: result }
+        })
+      )
+
+      const toolResultMessages = buildToolResultMessages(provider, response.toolCalls, results)
 
       // Continue conversation with tool results
-      response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+      response = await createMessage({
+        provider,
+        model,
         system: systemPrompt,
         tools: NEXUS_TOOLS,
-        messages: [...claudeMessages, { role: 'assistant', content: response.content }, toolResults],
+        messages: [...claudeMessages, response.assistantMessage, ...toolResultMessages],
       })
     }
 
     // Extract text response
-    const textContent = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
-    const assistantMessage = textContent?.text || 'I processed your request.'
+    const assistantMessage = response.text || 'I processed your request.'
 
     // Save messages to DB
     const lastUserMessage = messages[messages.length - 1]
@@ -579,6 +662,12 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error('Chat API error:', error)
+    if (error instanceof Error && error.message.includes('OpenAI API key not configured')) {
+      return NextResponse.json({
+        error: error.message,
+        message: error.message,
+      }, { status: 503 })
+    }
     if (error instanceof Error && error.message.includes('API key')) {
       return NextResponse.json({
         error: 'ANTHROPIC_API_KEY not configured. Add it to your .env file.',

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { anthropic } from '@/lib/anthropic'
+import { createMessage, AIProvider } from '@/lib/ai-provider'
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   code_review:
@@ -52,6 +52,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+  if (!user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  }
+
   let body: { tool: string; input: Record<string, string> }
   try {
     body = await req.json()
@@ -73,21 +78,24 @@ export async function POST(req: NextRequest) {
   const userMessage = buildUserMessage(tool, input)
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+    const prefs = await prisma.userPreferences.findUnique({ where: { userId: user.id } })
+    const provider = (prefs?.aiProvider || 'anthropic') as AIProvider
+    const model = provider === 'openai'
+      ? (prefs?.openaiModel || 'gpt-4o')
+      : (prefs?.aiModel || 'claude-sonnet-4-6')
+
+    const response = await createMessage({
+      provider,
+      model,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
+      tools: [],
+      maxTokens: 2048,
     })
 
-    const textContent = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => (block as { type: 'text'; text: string }).text)
-      .join('\n')
-
-    return NextResponse.json({ result: textContent })
+    return NextResponse.json({ result: response.text ?? '' })
   } catch (err: any) {
-    console.error('[dev/ai] Anthropic error:', err)
+    console.error('[dev/ai] AI error:', err)
     return NextResponse.json(
       { error: err?.message || 'AI request failed' },
       { status: 500 }

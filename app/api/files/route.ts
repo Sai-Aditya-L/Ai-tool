@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { anthropic } from '@/lib/anthropic'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
 
 const TEXT_MIME_TYPES = new Set([
   'text/plain',
@@ -50,7 +52,11 @@ export async function POST(req: NextRequest) {
 
     // Extract text content for supported types
     let content = ''
-    if (TEXT_MIME_TYPES.has(file.type) || file.type.startsWith('text/')) {
+    if (file.type === 'application/pdf') {
+      const buffer = Buffer.from(await file.arrayBuffer())
+      const pdfData = await pdfParse(buffer)
+      content = pdfData.text.substring(0, 10000)
+    } else if (TEXT_MIME_TYPES.has(file.type) || file.type.startsWith('text/')) {
       const raw = await file.text()
       content = raw.slice(0, 10000)
     }
@@ -76,7 +82,7 @@ export async function POST(req: NextRequest) {
     let summary: string | null = null
     try {
       const promptContent = content
-        ? `Summarize the following document content in 2-3 sentences:\n\n${content.slice(0, 4000)}`
+        ? `Summarize the following document content in 2-3 sentences:\n\nContent: ${content.substring(0, 6000)}`
         : `The file "${file.name}" (type: ${file.type}, size: ${file.size} bytes) is a binary/non-text file. Provide a 2-3 sentence description of what this type of file typically contains and how it might be used.`
 
       const response = await anthropic.messages.create({

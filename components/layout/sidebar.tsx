@@ -8,7 +8,7 @@ import {
   LayoutDashboard, MessageSquare, CheckSquare, Bell, Calendar,
   FileText, Brain, FolderOpen, BarChart2, Zap, Activity,
   Puzzle, Settings, LogOut, Mic, ChevronLeft, ChevronRight,
-  StickyNote, Mail, Bot, Code2
+  StickyNote, Mail, Bot, Code2, Wifi
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -48,6 +48,7 @@ const navItems = [
       { href: '/notifications', icon: Bell, label: 'Notifications', color: 'text-yellow-400' },
       { href: '/activity', icon: Activity, label: 'Activity Log', color: 'text-green-400' },
       { href: '/integrations', icon: Puzzle, label: 'Integrations', color: 'text-blue-400' },
+      { href: '/connected-devices', icon: Wifi, label: 'Devices', color: 'text-cyan-400' },
       { href: '/settings', icon: Settings, label: 'Settings', color: 'text-white/60' },
     ],
   },

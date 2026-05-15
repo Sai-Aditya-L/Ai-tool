@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { anthropic } from '@/lib/anthropic'
 import { listEmails, isGoogleConnected } from '@/lib/google'
 
 export async function GET(req: NextRequest) {
@@ -32,9 +33,43 @@ export async function GET(req: NextRequest) {
       labelIds: ['INBOX'],
     })
 
+    const emails = result.emails
+
+    // Optional AI analysis step when ?analyze=true is set
+    if (searchParams.get('analyze') === 'true' && emails && emails.length > 0) {
+      try {
+        const unreadEmails = emails.filter((e: any) => !e.isRead).slice(0, 5)
+        const emailsToAnalyze = unreadEmails.length > 0 ? unreadEmails : emails.slice(0, 5)
+
+        const emailList = emailsToAnalyze
+          .map((e: any, i: number) => `${i + 1}. Subject: ${e.subject}\n   From: ${e.from}\n   Snippet: ${e.snippet}`)
+          .join('\n\n')
+
+        const aiResponse = await anthropic.messages.create({
+          model: 'claude-haiku-4-5',
+          max_tokens: 1024,
+          system: 'You are an intelligent email analyzer. Extract action items, deadlines, meetings, bills, and important follow-ups from these emails. Return a JSON array of { type: \'task\'|\'reminder\'|\'meeting\'|\'bill\', title: string, dueDate?: string, priority: \'high\'|\'medium\'|\'low\', emailSubject: string }. Return ONLY valid JSON.',
+          messages: [{ role: 'user', content: `Analyze these emails and extract action items:\n\n${emailList}` }],
+        })
+
+        const textBlock = aiResponse.content.find(b => b.type === 'text')
+        if (textBlock && textBlock.type === 'text') {
+          const actionItems = JSON.parse(textBlock.text.trim())
+          return NextResponse.json({
+            connected: true,
+            emails,
+            nextPageToken: result.nextPageToken,
+            actionItems,
+          })
+        }
+      } catch {
+        // If AI analysis or parsing fails, fall through and return emails without actionItems
+      }
+    }
+
     return NextResponse.json({
       connected: true,
-      emails: result.emails,
+      emails,
       nextPageToken: result.nextPageToken,
     })
   } catch (error: any) {

@@ -4,6 +4,7 @@ import './globals.css'
 import { AuthProvider } from '@/components/providers/auth-provider'
 import { ToastProvider } from '@/components/providers/toast-provider'
 import { SearchProvider } from '@/components/search/search-provider'
+import { PWAProvider } from '@/components/providers/pwa-provider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -54,11 +55,13 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} bg-nexus-darker text-white antialiased`}>
         <AuthProvider>
-          <ToastProvider>
-            <SearchProvider>
-              {children}
-            </SearchProvider>
-          </ToastProvider>
+          <PWAProvider>
+            <ToastProvider>
+              <SearchProvider>
+                {children}
+              </SearchProvider>
+            </ToastProvider>
+          </PWAProvider>
         </AuthProvider>
       </body>
     </html>

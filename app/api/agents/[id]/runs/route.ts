@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { anthropic, NEXUS_SYSTEM_PROMPT, NEXUS_TOOLS } from '@/lib/anthropic'
-import Anthropic from '@anthropic-ai/sdk'
+import { NEXUS_SYSTEM_PROMPT, NEXUS_TOOLS } from '@/lib/anthropic'
+import { createMessage, buildToolResultMessages, AIProvider } from '@/lib/ai-provider'
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 // ---------------------------------------------------------------------------
 // Role-specific system prompt builder
@@ -295,6 +298,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  const rl = rateLimit(`agents:${user.id}`, 10, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
+
   const agent = await prisma.agent.findFirst({ where: { id: params.id, userId: user.id } })
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
@@ -333,46 +339,50 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // 2. Build system prompt
     const agentSystemPrompt = buildSystemPrompt(agent as { name: string; role: string; systemPrompt: string | null })
-    const builtSystemPrompt = `${NEXUS_SYSTEM_PROMPT}\n\n---\n\nAgent Identity:\n${agentSystemPrompt}`
+    const builtSystemPrompt = `${NEXUS_SYSTEM_PROMPT}\n\n---\n\nAgent Identity:\n${agentSystemPrompt}\n\nTask: ${task.trim()}`
 
-    // 3. Initial Anthropic API call
-    let response = await anthropic.messages.create({
-      model: (agent.model || 'claude-sonnet-4-6') as string,
-      max_tokens: 4096,
-      system: builtSystemPrompt + '\n\nTask: ' + task.trim(),
+    // 3. Resolve provider and model from user preferences
+    const prefs = await prisma.userPreferences.findUnique({ where: { userId: user.id } })
+    const provider = (prefs?.aiProvider || 'anthropic') as AIProvider
+    const agentModel = provider === 'openai'
+      ? (prefs?.openaiModel || 'gpt-4o')
+      : ((agent.model || prefs?.aiModel || 'claude-sonnet-4-6') as string)
+
+    // 4. Initial API call via unified abstraction
+    const agentMessages: (MessageParam | ChatCompletionMessageParam)[] = [
+      { role: 'user', content: task.trim() },
+    ]
+
+    let response = await createMessage({
+      provider,
+      model: agentModel,
+      system: builtSystemPrompt,
       tools: NEXUS_TOOLS,
-      messages: [{ role: 'user', content: task.trim() }],
+      messages: agentMessages,
     })
 
-    // 4. Agentic loop (max 5 iterations)
+    // 5. Agentic loop (max 5 iterations)
     const toolsUsed: string[] = []
     let iterations = 0
     const maxIterations = 5
-    const claudeMessages: Anthropic.MessageParam[] = [{ role: 'user', content: task.trim() }]
 
-    while (response.stop_reason === 'tool_use' && iterations < maxIterations) {
+    while (response.stopReason === 'tool_use' && iterations < maxIterations) {
       iterations++
 
-      const toolUseBlocks = response.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
-      )
-
       // Check for sensitive tools BEFORE executing any of them
-      for (const toolUse of toolUseBlocks) {
-        if (SENSITIVE_TOOLS.has(toolUse.name) || isDeleteOperation(toolUse.name)) {
-          // Log the tool that triggered approval
-          await log('tool_use', JSON.stringify({ tool: toolUse.name, input: toolUse.input }))
-          await log('approval_needed', `Action requires user approval: ${toolUse.name}`)
+      for (const toolCall of response.toolCalls) {
+        if (SENSITIVE_TOOLS.has(toolCall.name) || isDeleteOperation(toolCall.name)) {
+          await log('tool_use', JSON.stringify({ tool: toolCall.name, input: toolCall.input }))
+          await log('approval_needed', `Action requires user approval: ${toolCall.name}`)
 
-          // Save pending action to metadata and halt
           await prisma.agentRun.update({
             where: { id: run.id },
             data: {
               status: 'needs_approval',
               metadata: JSON.stringify({
-                pendingTool: toolUse.name,
-                pendingInput: toolUse.input,
-                pendingToolUseId: toolUse.id,
+                pendingTool: toolCall.name,
+                pendingInput: toolCall.input,
+                pendingToolUseId: toolCall.id,
                 iterationsCompleted: iterations,
                 toolsUsed,
               }),
@@ -389,40 +399,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
 
       // Execute all tool calls in this iteration
-      const toolResults: Anthropic.ToolResultBlockParam[] = []
+      const results: { id: string; content: string }[] = []
 
-      for (const toolUse of toolUseBlocks) {
-        await log('tool_use', JSON.stringify({ tool: toolUse.name, input: toolUse.input }))
+      for (const toolCall of response.toolCalls) {
+        await log('tool_use', JSON.stringify({ tool: toolCall.name, input: toolCall.input }))
 
-        const result = await executeAgentTool(toolUse.name, toolUse.input as Record<string, unknown>, user.id)
-        toolsUsed.push(toolUse.name)
+        const result = await executeAgentTool(toolCall.name, toolCall.input, user.id)
+        toolsUsed.push(toolCall.name)
 
         await log('tool_result', result.substring(0, 500))
-
-        toolResults.push({
-          type: 'tool_result' as const,
-          tool_use_id: toolUse.id,
-          content: result,
-        })
+        results.push({ id: toolCall.id, content: result })
       }
 
-      // Append assistant message + tool results to conversation
-      claudeMessages.push({ role: 'assistant', content: response.content })
-      claudeMessages.push({ role: 'user', content: toolResults })
+      const toolResultMessages = buildToolResultMessages(provider, response.toolCalls, results)
 
-      // Continue the conversation
-      response = await anthropic.messages.create({
-        model: (agent.model || 'claude-sonnet-4-6') as string,
-        max_tokens: 4096,
-        system: builtSystemPrompt + '\n\nTask: ' + task.trim(),
+      // Append assistant message + tool results to conversation and continue
+      agentMessages.push(response.assistantMessage)
+      agentMessages.push(...toolResultMessages)
+
+      response = await createMessage({
+        provider,
+        model: agentModel,
+        system: builtSystemPrompt,
         tools: NEXUS_TOOLS,
-        messages: claudeMessages,
+        messages: agentMessages,
       })
     }
 
-    // 5. Extract final text output
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
-    const finalOutput = textBlock?.text || 'Task completed.'
+    // 6. Extract final text output
+    const finalOutput = response.text || 'Task completed.'
 
     await log('output', finalOutput)
 

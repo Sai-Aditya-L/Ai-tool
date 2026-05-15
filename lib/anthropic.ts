@@ -350,4 +350,64 @@ export const NEXUS_TOOLS: Anthropic.Tool[] = [
       required: ['code'],
     },
   },
+  {
+    name: 'run_automation',
+    description: 'Trigger an existing automation to run immediately',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        automationName: { type: 'string', description: 'Name of the automation to run' },
+      },
+      required: ['automationName'],
+    },
+  },
+  {
+    name: 'summarize_meeting',
+    description: 'Summarize a meeting transcript or notes and extract action items',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        transcript: { type: 'string', description: 'Meeting transcript or notes to summarize' },
+        title: { type: 'string', description: 'Meeting title' },
+        saveNote: { type: 'string', description: 'Whether to save as a note (true/false)' },
+      },
+      required: ['transcript'],
+    },
+  },
+  {
+    name: 'review_pull_request',
+    description: 'Review a pull request diff or description for code quality, security, and issues',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        diff: { type: 'string', description: 'The PR diff or changed code' },
+        title: { type: 'string', description: 'PR title' },
+        description: { type: 'string', description: 'PR description' },
+      },
+      required: ['diff'],
+    },
+  },
+  {
+    name: 'trigger_workflow',
+    description: 'Trigger a multi-step workflow sequence',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        workflow: { type: 'string', enum: ['morning_briefing', 'end_of_day', 'weekly_review', 'project_kickoff', 'inbox_zero'], description: 'Predefined workflow to trigger' },
+        customSteps: { type: 'string', description: 'Custom workflow steps as comma-separated actions' },
+      },
+      required: ['workflow'],
+    },
+  },
+  {
+    name: 'get_github_repos',
+    description: 'List GitHub repositories for the connected GitHub account',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        limit: { type: 'string', description: 'Maximum number of repos to return' },
+      },
+      required: [],
+    },
+  },
 ]

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { Header } from '@/components/layout/header'
 import { AIOrb } from '@/components/dashboard/ai-orb'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,8 @@ export default async function DashboardPage() {
     unreadNotifications,
     upcomingFiles,
     agentRuns,
+    todayEvents,
+    unreadEmailCount,
   ] = await Promise.all([
     prisma.task.count({ where: { userId: user!.id, status: { in: ['pending', 'in_progress'] } } }),
     prisma.task.count({ where: { userId: user!.id, status: 'completed', completedAt: { gte: startOfDay } } }),
@@ -64,11 +67,17 @@ export default async function DashboardPage() {
     prisma.notification.count({ where: { userId: user!.id, read: false } }),
     prisma.userFile.findMany({ where: { userId: user!.id }, orderBy: { createdAt: 'desc' }, take: 3 }),
     prisma.agentRun.findMany({ where: { userId: user!.id }, orderBy: { createdAt: 'desc' }, take: 5, include: { agent: true } }),
+    prisma.reminder.findMany({
+      where: { userId: user!.id, status: 'pending', dueAt: { gte: startOfDay, lte: endOfDay } },
+      orderBy: { dueAt: 'asc' },
+      take: 5,
+    }),
+    prisma.emailCache.count({ where: { userId: user!.id, isRead: false } }).catch(() => 0),
   ])
 
   const dashData = {
-    stats: { pendingTasks, completedToday, todayRemindersCount: todayReminders.length, unreadNotifications },
-    data: { todayReminders, upcomingReminders, recentActivity, urgentTasks, recentTasks, trackers, recentFiles: upcomingFiles, agentRuns },
+    stats: { pendingTasks, completedToday, todayRemindersCount: todayReminders.length, unreadNotifications, unreadEmailCount },
+    data: { todayReminders, upcomingReminders, recentActivity, urgentTasks, recentTasks, trackers, recentFiles: upcomingFiles, agentRuns, todayEvents },
   }
 
   return (
@@ -129,6 +138,20 @@ export default async function DashboardPage() {
             </div>
             <div className="text-3xl font-bold text-white mb-1">{unreadNotifications}</div>
             <div className="text-yellow-400/60 text-xs">Awaiting review</div>
+          </div>
+
+          {/* Unread Emails stat card */}
+          <div className="glass-panel-hover rounded-2xl p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="text-white/40 text-xs uppercase tracking-wider">Unread Emails</div>
+              <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center">
+                <span className="text-cyan-400 text-sm">✉</span>
+              </div>
+            </div>
+            <div className="text-3xl font-bold text-white mb-1">{unreadEmailCount}</div>
+            <Link href="/emails" className="text-cyan-400/60 text-xs hover:text-cyan-400 transition-colors">
+              View emails →
+            </Link>
           </div>
 
           {/* Client-side dynamic components */}
