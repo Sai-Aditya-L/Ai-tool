@@ -276,7 +276,7 @@ export default function SystemMonitorPage() {
                         fontSize: 12,
                       }}
                       labelStyle={{ color: 'rgba(255,255,255,0.4)' }}
-                      formatter={(value: number, name: string) => [`${value}%`, name === 'cpu' ? 'CPU' : 'Memory']}
+                      formatter={(value: unknown, name: unknown) => [`${value}%`, name === 'cpu' ? 'CPU' : 'Memory']}
                     />
                     <Line
                       type="monotone"

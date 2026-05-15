@@ -9,7 +9,7 @@ import {
   FileText, Brain, FolderOpen, BarChart2, Zap, Activity,
   Puzzle, Settings, LogOut, Mic, ChevronLeft, ChevronRight,
   StickyNote, Mail, Bot, Code2, Wifi, Sparkles, Newspaper, TrendingUp,
-  Wrench, BrainCircuit, Monitor
+  Wrench, BrainCircuit, Monitor, Music2, Home, FlameKindling
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -31,6 +31,7 @@ const navItems = [
       { href: '/calendar', icon: Calendar, label: 'Calendar', color: 'text-blue-400' },
       { href: '/emails', icon: Mail, label: 'Emails', color: 'text-cyan-400' },
       { href: '/notes', icon: StickyNote, label: 'Notes', color: 'text-pink-400' },
+      { href: '/habits', icon: FlameKindling, label: 'Habits', color: 'text-orange-400' },
     ],
   },
   {
@@ -51,6 +52,8 @@ const navItems = [
   {
     group: 'System',
     items: [
+      { href: '/media', icon: Music2, label: 'Media Center', color: 'text-green-400' },
+      { href: '/home-control', icon: Home, label: 'Home Control', color: 'text-amber-400' },
       { href: '/notifications', icon: Bell, label: 'Notifications', color: 'text-yellow-400' },
       { href: '/activity', icon: Activity, label: 'Activity Log', color: 'text-green-400' },
       { href: '/integrations', icon: Puzzle, label: 'Integrations', color: 'text-blue-400' },

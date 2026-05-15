@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Mic, Paperclip, Zap, RotateCcw, Copy, Check, StopCircle, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, History, ImageIcon, X as XIcon } from 'lucide-react'
+import { Send, Mic, Paperclip, Zap, RotateCcw, Copy, Check, StopCircle, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, History, ImageIcon, X as XIcon, FileText, Globe } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -15,6 +15,7 @@ interface Message {
   tokens?: number
   image?: string
   toolStatus?: string
+  originalContent?: string
 }
 
 interface ConversationSummary {
@@ -35,6 +36,8 @@ const SUGGESTED_PROMPTS = [
   "Save to memory: I prefer dark themes in all my apps",
 ]
 
+const TRANSLATE_LANGUAGES = ['Spanish', 'French', 'German', 'Japanese', 'Arabic', 'Hindi']
+
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -53,10 +56,14 @@ export function ChatInterface() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [loadingConversation, setLoadingConversation] = useState<string | null>(null)
   const [pendingImage, setPendingImage] = useState<string | null>(null)
+  const [pendingPdf, setPendingPdf] = useState<{ name: string; text: string; pages: number } | null>(null)
+  const [translatingId, setTranslatingId] = useState<string | null>(null)
+  const [showTranslateMenu, setShowTranslateMenu] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch conversation list on mount and whenever sidebar opens
   useEffect(() => {
@@ -142,16 +149,92 @@ export function ChatInterface() {
     e.target.value = ''
   }
 
+  const handlePdfSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.type !== 'application/pdf') {
+      toast.error('Please select a PDF file')
+      return
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('PDF must be under 20MB')
+      return
+    }
+    const toastId = toast.loading('Extracting PDF text...')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/tools/pdf', { method: 'POST', body: formData })
+      if (!res.ok) throw new Error('PDF extraction failed')
+      const data = await res.json()
+      setPendingPdf({ name: data.filename, text: data.text, pages: data.pages })
+      toast.success(`PDF attached — ${data.pages} page${data.pages !== 1 ? 's' : ''}${data.truncated ? ' (truncated)' : ''}`, { id: toastId })
+    } catch {
+      toast.error('Failed to extract PDF text', { id: toastId })
+    }
+    e.target.value = ''
+  }
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items)
+    const imageItem = items.find(item => item.type.startsWith('image/'))
+    if (imageItem) {
+      e.preventDefault()
+      const file = imageItem.getAsFile()
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        if (typeof ev.target?.result === 'string') {
+          setPendingImage(ev.target.result)
+          toast.success('Screenshot attached — ask NEXUS about it')
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const translateMessage = async (msgId: string, text: string, targetLanguage: string) => {
+    setShowTranslateMenu(null)
+    setTranslatingId(msgId)
+    try {
+      const res = await fetch('/api/tools/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, targetLanguage }),
+      })
+      if (!res.ok) throw new Error('Translation failed')
+      const data = await res.json()
+      setMessages(prev => prev.map(m =>
+        m.id === msgId
+          ? { ...m, originalContent: m.originalContent ?? m.content, content: `${data.translated}\n\n*(translated to ${targetLanguage})*` }
+          : m
+      ))
+      toast.success(`Translated to ${targetLanguage}`)
+    } catch {
+      toast.error('Translation failed')
+    } finally {
+      setTranslatingId(null)
+    }
+  }
+
   const sendMessage = useCallback(async (text?: string) => {
     const content = text || input.trim()
-    if (!content || loading) return
+    if (!content && !pendingImage && !pendingPdf) return
+    if (loading) return
 
     const capturedImage = pendingImage
+    const capturedPdf = pendingPdf
+
+    let finalContent = content
+    if (capturedPdf) {
+      const userText = content || 'Please analyze this PDF.'
+      finalContent = `[PDF: ${capturedPdf.name}, ${capturedPdf.pages} pages]\n\n${capturedPdf.text}\n\n---\n\nUser question: ${userText}`
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content,
+      content: finalContent,
       timestamp: new Date(),
       image: capturedImage || undefined,
     }
@@ -167,6 +250,7 @@ export function ChatInterface() {
     setMessages(prev => [...prev, userMsg, loadingMsg])
     setInput('')
     setPendingImage(null)
+    setPendingPdf(null)
     setLoading(true)
 
     const allMessages = [
@@ -221,7 +305,7 @@ export function ChatInterface() {
       abortRef.current = null
       inputRef.current?.focus()
     }
-  }, [input, loading, messages, conversationId])
+  }, [input, loading, messages, conversationId, pendingImage, pendingPdf])
 
   function stopGeneration() {
     abortRef.current?.abort()
@@ -264,7 +348,7 @@ export function ChatInterface() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full" onClick={() => showTranslateMenu && setShowTranslateMenu(null)}>
       {/* Conversation history sidebar */}
       <div
         className={cn(
@@ -426,12 +510,63 @@ export function ChatInterface() {
                         {formatRelativeTime(msg.timestamp)}
                       </span>
                       {msg.role === 'assistant' && (
-                        <button
-                          onClick={() => copyMessage(msg.id, msg.content)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-cyan-400 ml-2"
-                        >
-                          {copiedId === msg.id ? <Check size={12} /> : <Copy size={12} />}
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {/* Translate button */}
+                          <div className="relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setShowTranslateMenu(prev => prev === msg.id ? null : msg.id)
+                              }}
+                              disabled={translatingId === msg.id}
+                              className={cn(
+                                'opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-cyan-400 p-0.5',
+                                translatingId === msg.id && 'opacity-100 text-cyan-400 animate-pulse'
+                              )}
+                              title="Translate message"
+                            >
+                              <Globe size={12} />
+                            </button>
+                            {showTranslateMenu === msg.id && (
+                              <div
+                                className="absolute bottom-full right-0 mb-1 z-50 glass-panel border border-cyan-400/20 rounded-lg py-1 min-w-[120px] shadow-lg"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                {msg.originalContent && (
+                                  <button
+                                    onClick={() => {
+                                      setMessages(prev => prev.map(m =>
+                                        m.id === msg.id && m.originalContent
+                                          ? { ...m, content: m.originalContent, originalContent: undefined }
+                                          : m
+                                      ))
+                                      setShowTranslateMenu(null)
+                                    }}
+                                    className="w-full text-left px-3 py-1.5 text-xs text-cyan-400 hover:bg-cyan-400/10 transition-colors"
+                                  >
+                                    Original
+                                  </button>
+                                )}
+                                {TRANSLATE_LANGUAGES.map(lang => (
+                                  <button
+                                    key={lang}
+                                    onClick={() => translateMessage(msg.id, msg.originalContent ?? msg.content, lang)}
+                                    className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-cyan-400/10 transition-colors"
+                                  >
+                                    {lang}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {/* Copy button */}
+                          <button
+                            onClick={() => copyMessage(msg.id, msg.content)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-cyan-400 ml-1"
+                          >
+                            {copiedId === msg.id ? <Check size={12} /> : <Copy size={12} />}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </>
@@ -483,12 +618,30 @@ export function ChatInterface() {
                 <span className="text-xs text-white/40 mt-1">Image attached — describe what you need</span>
               </div>
             )}
+            {pendingPdf && (
+              <div className="px-4 pt-3 flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-cyan-400/10 border border-cyan-400/20 rounded-lg px-3 py-2 flex-1 min-w-0">
+                  <FileText size={14} className="text-cyan-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-white/80 truncate">{pendingPdf.name}</p>
+                    <p className="text-[10px] text-white/40">{pendingPdf.pages} page{pendingPdf.pages !== 1 ? 's' : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => setPendingPdf(null)}
+                    className="flex-shrink-0 text-white/40 hover:text-red-400 transition-colors"
+                  >
+                    <XIcon size={12} />
+                  </button>
+                </div>
+              </div>
+            )}
           <div className="flex items-end gap-3 px-4 py-3">
             <textarea
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder="Message NEXUS... (Enter to send, Shift+Enter for new line)"
               rows={1}
               className="flex-1 bg-transparent text-white/85 placeholder-white/25 outline-none resize-none text-sm leading-relaxed"
@@ -525,6 +678,25 @@ export function ChatInterface() {
               >
                 <ImageIcon size={16} />
               </button>
+              {/* PDF upload button */}
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handlePdfSelect}
+              />
+              <button
+                type="button"
+                onClick={() => pdfInputRef.current?.click()}
+                className={cn(
+                  'p-2 rounded-lg transition-all text-white/30 hover:text-cyan-400 hover:bg-cyan-400/5 border border-transparent hover:border-cyan-400/15',
+                  pendingPdf && 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+                )}
+                title="Attach PDF"
+              >
+                <FileText size={16} />
+              </button>
               <button
                 onClick={() => clearConversation()}
                 className="text-white/30 hover:text-white/60 transition-colors p-1"
@@ -542,7 +714,7 @@ export function ChatInterface() {
               ) : (
                 <button
                   onClick={() => sendMessage()}
-                  disabled={!input.trim() && !pendingImage}
+                  disabled={!input.trim() && !pendingImage && !pendingPdf}
                   className="w-8 h-8 rounded-lg bg-cyan-400/10 border border-cyan-400/30 flex items-center justify-center text-cyan-400 hover:bg-cyan-400/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
                   <Send size={16} />
