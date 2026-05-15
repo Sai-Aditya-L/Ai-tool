@@ -317,6 +317,20 @@ export default function VoicePage() {
                   </button>
                 </div>
 
+                {/* Wake-word toggle */}
+                <div className="flex items-center justify-between py-3 border-b border-cyan-400/10">
+                  <div>
+                    <p className="text-white/70 text-sm font-medium">Wake-Word Mode</p>
+                    <p className="text-white/30 text-xs mt-0.5">Say &quot;Hey NEXUS&quot; to activate</p>
+                  </div>
+                  <button
+                    onClick={toggleWakeWordMode}
+                    className={`relative w-11 h-6 rounded-full transition-all ${wakeWordMode ? 'bg-cyan-400/80' : 'bg-white/10'}`}
+                  >
+                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${wakeWordMode ? 'left-[22px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+
                 {/* Voice selector */}
                 {availableVoices.length > 0 && (
                   <div className="space-y-1.5">
@@ -374,6 +388,17 @@ export default function VoicePage() {
                     <span>0.5</span><span>1.0</span><span>1.5</span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Wake-word status indicator */}
+            {wakeWordMode && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg border border-cyan-400/20 bg-cyan-400/5 mb-4">
+                <div className={`w-2 h-2 rounded-full ${wakeWordActive ? 'bg-cyan-400 animate-pulse' : 'bg-white/20'}`}
+                  style={wakeWordActive ? { boxShadow: '0 0 8px #00e5ff' } : {}} />
+                <span className="text-xs text-cyan-400/70 nexus-mono">
+                  {wakeWordActive ? 'LISTENING FOR "HEY NEXUS"...' : 'WAKE-WORD INACTIVE'}
+                </span>
               </div>
             )}
 
