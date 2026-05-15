@@ -39,6 +39,14 @@ model User {
   agentRuns        AgentRun[]
   dailySummaries   DailySummary[]
   pushSubscriptions PushSubscription[]
+  habits           Habit[]
+  habitEntries     HabitEntry[]
+  riskEntries      RiskEntry[]
+  threatModels     ThreatModel[]
+  goals            Goal[]
+  milestones       Milestone[]
+  knowledgeNodes   KnowledgeNode[]
+  knowledgeEdges   KnowledgeEdge[]
 }
 
 model Account {
@@ -89,6 +97,10 @@ model UserPreferences {
   aiModel         String   @default("claude-sonnet-4-6")
   aiProvider      String   @default("anthropic")
   openaiModel     String   @default("gpt-4o")
+  currentMode     String   @default("personal")
+  onboardingDone  Boolean  @default(false)
+  workRole        String?
+  preferredName   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -475,4 +487,166 @@ model PushSubscription {
 
   @@unique([userId, endpoint])
   @@index([userId])
+}
+
+model Habit {
+  id          String       @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  frequency   String       @default("daily")
+  targetDays  String?
+  color       String       @default("#00e5ff")
+  icon        String?
+  status      String       @default("active")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries HabitEntry[]
+
+  @@index([userId])
+}
+
+model HabitEntry {
+  id        String   @id @default(cuid())
+  habitId   String
+  userId    String
+  date      String
+  completed Boolean  @default(true)
+  note      String?
+  createdAt DateTime @default(now())
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([habitId])
+  @@index([userId, date])
+}
+
+model RiskEntry {
+  id           String    @id @default(cuid())
+  userId       String
+  title        String
+  description  String?
+  category     String    @default("Technical")
+  likelihood   String    @default("medium")
+  impact       String    @default("medium")
+  riskScore    Int       @default(0)
+  status       String    @default("open")
+  owner        String?
+  mitigation   String?
+  residualRisk String?
+  framework    String?
+  controlRef   String?
+  dueDate      DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, framework])
+}
+
+model ThreatModel {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  system      String?
+  methodology String   @default("STRIDE")
+  threats     String?
+  mitigations String?
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Goal {
+  id          String      @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  category    String      @default("personal")
+  status      String      @default("active")
+  targetDate  DateTime?
+  progress    Int         @default(0)
+  priority    String      @default("medium")
+  tags        String?
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestones Milestone[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, category])
+}
+
+model Milestone {
+  id          String    @id @default(cuid())
+  goalId      String
+  userId      String
+  title       String
+  description String?
+  dueDate     DateTime?
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+  @@index([userId])
+}
+
+model KnowledgeNode {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  entityId  String
+  label     String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromEdges KnowledgeEdge[]   @relation("FromNode")
+  toEdges   KnowledgeEdge[]   @relation("ToNode")
+
+  @@unique([userId, type, entityId])
+  @@index([userId, type])
+}
+
+model KnowledgeEdge {
+  id         String   @id @default(cuid())
+  userId     String
+  fromNodeId String
+  toNodeId   String
+  type       String
+  label      String?
+  weight     Float    @default(1.0)
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromNode KnowledgeNode @relation("FromNode", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode   KnowledgeNode @relation("ToNode", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([fromNodeId, toNodeId, type])
+  @@index([userId])
+  @@index([fromNodeId])
+  @@index([toNodeId])
 }
