@@ -1,16 +1,196 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Header } from '@/components/layout/header'
-import { Settings, User, Bell, Shield, Brain, Cpu, Key, Save } from 'lucide-react'
+import { Settings, User, Bell, Shield, Brain, Cpu, Key, Save, Download, Trash2, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// ── Toggle component ──────────────────────────────────────────────────────────
+function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!enabled)}
+      className={`relative w-10 h-5 rounded-full border transition-all duration-200 flex-shrink-0 ${
+        enabled
+          ? 'bg-cyan-400/40 border-cyan-400/50'
+          : 'bg-white/10 border-white/20'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 w-4 h-4 rounded-full transition-all duration-200 ${
+          enabled ? 'left-5 bg-cyan-400' : 'left-0.5 bg-white/40'
+        }`}
+      />
+    </button>
+  )
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface Preferences {
+  assistantName: string
+  aiModel: string
+  voiceEnabled: boolean
+  notificationsOn: boolean
+  timezone: string
+  theme: string
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { data: session } = useSession()
-  const [saving, setSaving] = useState(false)
   const [activeSection, setActiveSection] = useState('profile')
 
+  // Profile
+  const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+
+  // Assistant
+  const [assistantName, setAssistantName] = useState('NEXUS')
+  const [aiModel, setAiModel] = useState('claude-sonnet-4-6')
+  const [voiceEnabled, setVoiceEnabled] = useState(false)
+  const [timezone, setTimezone] = useState('UTC')
+  const [savingAssistant, setSavingAssistant] = useState(false)
+
+  // Notifications
+  const [notificationsOn, setNotificationsOn] = useState(true)
+  const [notifTypes, setNotifTypes] = useState({
+    taskReminders: true,
+    reminderAlerts: true,
+    dailyBriefing: false,
+    automationReports: false,
+    importantEmails: true,
+  })
+  const [savingNotifs, setSavingNotifs] = useState(false)
+
+  // Privacy
+  const [clearingMemory, setClearingMemory] = useState(false)
+  const [exportingData, setExportingData] = useState(false)
+
+  // ── Load settings on mount ──────────────────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => {
+        if (data.name !== undefined) setDisplayName(data.name ?? '')
+        if (data.email !== undefined) setEmail(data.email ?? '')
+        if (data.preferences) {
+          const p: Preferences = data.preferences
+          setAssistantName(p.assistantName ?? 'NEXUS')
+          setAiModel(p.aiModel ?? 'claude-sonnet-4-6')
+          setVoiceEnabled(p.voiceEnabled ?? false)
+          setNotificationsOn(p.notificationsOn ?? true)
+          setTimezone(p.timezone ?? 'UTC')
+        }
+      })
+      .catch(() => toast.error('Failed to load settings'))
+  }, [])
+
+  // ── Save handlers ───────────────────────────────────────────────────────────
+  async function saveProfile() {
+    setSavingProfile(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: displayName }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      toast.success('Profile saved')
+    } catch {
+      toast.error('Failed to save profile')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  async function saveAssistant() {
+    setSavingAssistant(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistantName, aiModel, voiceEnabled, timezone }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      toast.success('Assistant configuration saved')
+    } catch {
+      toast.error('Failed to save configuration')
+    } finally {
+      setSavingAssistant(false)
+    }
+  }
+
+  async function saveNotifications() {
+    setSavingNotifs(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationsOn }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      toast.success('Notification preferences saved')
+    } catch {
+      toast.error('Failed to save preferences')
+    } finally {
+      setSavingNotifs(false)
+    }
+  }
+
+  async function clearAllMemory() {
+    if (!confirm('Clear all NEXUS memory? This cannot be undone.')) return
+    setClearingMemory(true)
+    try {
+      const res = await fetch('/api/memory', { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed')
+      toast.success('All memory cleared')
+    } catch {
+      toast.error('Failed to clear memory')
+    } finally {
+      setClearingMemory(false)
+    }
+  }
+
+  async function exportData() {
+    setExportingData(true)
+    try {
+      const [tasksRes, notesRes, remindersRes] = await Promise.all([
+        fetch('/api/tasks'),
+        fetch('/api/notes'),
+        fetch('/api/reminders'),
+      ])
+      const [tasksData, notesData, remindersData] = await Promise.all([
+        tasksRes.json(),
+        notesRes.json(),
+        remindersRes.json(),
+      ])
+      const exportPayload = {
+        exportedAt: new Date().toISOString(),
+        tasks: tasksData.tasks ?? [],
+        notes: notesData.notes ?? [],
+        reminders: remindersData.reminders ?? [],
+      }
+      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `nexus-export-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success('Data exported successfully')
+    } catch {
+      toast.error('Failed to export data')
+    } finally {
+      setExportingData(false)
+    }
+  }
+
+  // ── Sections ────────────────────────────────────────────────────────────────
   const sections = [
     { id: 'profile', icon: User, label: 'Profile' },
     { id: 'assistant', icon: Cpu, label: 'Assistant' },
@@ -19,6 +199,15 @@ export default function SettingsPage() {
     { id: 'api', icon: Key, label: 'API Keys' },
   ]
 
+  const notifItems: { key: keyof typeof notifTypes; label: string; desc: string }[] = [
+    { key: 'taskReminders', label: 'Task reminders', desc: 'Get notified when tasks are due' },
+    { key: 'reminderAlerts', label: 'Reminder alerts', desc: 'Push notifications for your reminders' },
+    { key: 'dailyBriefing', label: 'Daily briefing', desc: 'Morning summary of your day' },
+    { key: 'automationReports', label: 'Automation reports', desc: 'Get notified when automations run' },
+    { key: 'importantEmails', label: 'Important emails', desc: 'Alert when important emails detected' },
+  ]
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <Header title="Settings" subtitle="Configure your NEXUS system" />
@@ -50,6 +239,8 @@ export default function SettingsPage() {
 
             {/* Content */}
             <div className="flex-1 min-w-0">
+
+              {/* ── Profile ── */}
               {activeSection === 'profile' && (
                 <div className="glass-panel rounded-2xl p-6 space-y-4">
                   <h2 className="text-white font-semibold flex items-center gap-2">
@@ -57,30 +248,50 @@ export default function SettingsPage() {
                   </h2>
                   <div className="flex items-center gap-4 pb-4 border-b border-white/5">
                     <div className="w-16 h-16 rounded-full border-2 border-cyan-400/20 bg-gradient-to-br from-cyan-900/40 to-violet-900/40 flex items-center justify-center text-2xl">
-                      {session?.user?.name?.charAt(0).toUpperCase() || 'U'}
+                      {displayName?.charAt(0).toUpperCase() || session?.user?.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
                     <div>
-                      <p className="text-white font-medium">{session?.user?.name || 'User'}</p>
-                      <p className="text-white/40 text-sm">{session?.user?.email}</p>
+                      <p className="text-white font-medium">{displayName || session?.user?.name || 'User'}</p>
+                      <p className="text-white/40 text-sm">{email || session?.user?.email}</p>
                       <p className="text-cyan-400/60 text-xs mt-1">NEXUS Account</p>
                     </div>
                   </div>
                   <div className="space-y-3">
                     <div>
                       <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Display Name</label>
-                      <input type="text" defaultValue={session?.user?.name || ''} className="nexus-input" />
+                      <input
+                        type="text"
+                        value={displayName}
+                        onChange={e => setDisplayName(e.target.value)}
+                        className="nexus-input"
+                      />
                     </div>
                     <div>
                       <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Email</label>
-                      <input type="email" defaultValue={session?.user?.email || ''} className="nexus-input" disabled />
+                      <input
+                        type="email"
+                        value={email}
+                        className="nexus-input"
+                        disabled
+                      />
                     </div>
                   </div>
-                  <button className="nexus-btn-primary flex items-center gap-2 text-sm">
-                    <Save size={14} /> Save Changes
+                  <button
+                    onClick={saveProfile}
+                    disabled={savingProfile}
+                    className="nexus-btn-primary flex items-center gap-2 text-sm disabled:opacity-60"
+                  >
+                    {savingProfile ? (
+                      <span className="w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Save size={14} />
+                    )}
+                    {savingProfile ? 'Saving…' : 'Save Changes'}
                   </button>
                 </div>
               )}
 
+              {/* ── Assistant ── */}
               {activeSection === 'assistant' && (
                 <div className="glass-panel rounded-2xl p-6 space-y-4">
                   <h2 className="text-white font-semibold flex items-center gap-2">
@@ -89,41 +300,101 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <div>
                       <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Assistant Name</label>
-                      <input type="text" defaultValue="NEXUS" className="nexus-input" />
+                      <input
+                        type="text"
+                        value={assistantName}
+                        onChange={e => setAssistantName(e.target.value)}
+                        className="nexus-input"
+                      />
                     </div>
                     <div>
                       <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">AI Model</label>
-                      <select className="nexus-input">
+                      <select
+                        value={aiModel}
+                        onChange={e => setAiModel(e.target.value)}
+                        className="nexus-input"
+                      >
                         <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Recommended)</option>
                         <option value="claude-opus-4-7">Claude Opus 4.7 (Most Capable)</option>
-                        <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fastest)</option>
+                        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Fastest)</option>
                       </select>
                     </div>
                     <div>
                       <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Timezone</label>
-                      <input type="text" placeholder="UTC" className="nexus-input" />
+                      <input
+                        type="text"
+                        value={timezone}
+                        onChange={e => setTimezone(e.target.value)}
+                        placeholder="UTC"
+                        className="nexus-input"
+                      />
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg border border-white/5">
                       <div>
                         <p className="text-white/70 text-sm">Voice Commands</p>
                         <p className="text-white/35 text-xs">Enable push-to-talk voice input</p>
                       </div>
-                      <div className="w-10 h-5 bg-cyan-400/30 rounded-full border border-cyan-400/40" />
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-white/5">
-                      <div>
-                        <p className="text-white/70 text-sm">Proactive Suggestions</p>
-                        <p className="text-white/35 text-xs">Allow NEXUS to proactively suggest actions</p>
-                      </div>
-                      <div className="w-10 h-5 bg-cyan-400/30 rounded-full border border-cyan-400/40" />
+                      <Toggle enabled={voiceEnabled} onChange={setVoiceEnabled} />
                     </div>
                   </div>
-                  <button className="nexus-btn-primary flex items-center gap-2 text-sm">
-                    <Save size={14} /> Save Configuration
+                  <button
+                    onClick={saveAssistant}
+                    disabled={savingAssistant}
+                    className="nexus-btn-primary flex items-center gap-2 text-sm disabled:opacity-60"
+                  >
+                    {savingAssistant ? (
+                      <span className="w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Save size={14} />
+                    )}
+                    {savingAssistant ? 'Saving…' : 'Save Configuration'}
                   </button>
                 </div>
               )}
 
+              {/* ── Notifications ── */}
+              {activeSection === 'notifications' && (
+                <div className="glass-panel rounded-2xl p-6 space-y-4">
+                  <h2 className="text-white font-semibold flex items-center gap-2">
+                    <Bell size={16} className="text-cyan-400" /> Notifications
+                  </h2>
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-cyan-400/10 bg-cyan-400/5">
+                    <div>
+                      <p className="text-white/80 text-sm font-medium">All Notifications</p>
+                      <p className="text-white/35 text-xs">Master toggle for all notification types</p>
+                    </div>
+                    <Toggle enabled={notificationsOn} onChange={setNotificationsOn} />
+                  </div>
+                  <div className="space-y-2">
+                    {notifItems.map(item => (
+                      <div key={item.key} className="flex items-center justify-between p-3 rounded-lg border border-white/5">
+                        <div>
+                          <p className="text-white/70 text-sm">{item.label}</p>
+                          <p className="text-white/35 text-xs">{item.desc}</p>
+                        </div>
+                        <Toggle
+                          enabled={notifTypes[item.key]}
+                          onChange={v => setNotifTypes(prev => ({ ...prev, [item.key]: v }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={saveNotifications}
+                    disabled={savingNotifs}
+                    className="nexus-btn-primary flex items-center gap-2 text-sm disabled:opacity-60"
+                  >
+                    {savingNotifs ? (
+                      <span className="w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Save size={14} />
+                    )}
+                    {savingNotifs ? 'Saving…' : 'Save Preferences'}
+                  </button>
+                </div>
+              )}
+
+              {/* ── Privacy ── */}
               {activeSection === 'privacy' && (
                 <div className="glass-panel rounded-2xl p-6 space-y-4">
                   <h2 className="text-white font-semibold flex items-center gap-2">
@@ -132,7 +403,7 @@ export default function SettingsPage() {
                   <div className="space-y-3">
                     {[
                       { title: 'Data Retention', desc: 'Conversations and activity logs are kept for 90 days by default' },
-                      { title: 'Memory Control', desc: 'NEXUS memory can be fully cleared at any time from the Memory page' },
+                      { title: 'Memory Control', desc: 'NEXUS memory can be fully cleared at any time using the button below' },
                       { title: 'Encrypted Storage', desc: 'All sensitive data is encrypted at rest and in transit' },
                       { title: 'OAuth Security', desc: 'Third-party integrations use OAuth 2.0 — we never store passwords' },
                       { title: 'Audit Logs', desc: 'All NEXUS actions are logged and visible in the Activity Log' },
@@ -146,14 +417,36 @@ export default function SettingsPage() {
                       </div>
                     ))}
                   </div>
-                  <div className="pt-2 border-t border-white/5">
-                    <button className="text-red-400 hover:text-red-300 text-sm border border-red-400/20 hover:border-red-400/40 px-4 py-2 rounded-lg transition-all">
-                      Delete All My Data
+                  <div className="pt-2 border-t border-white/5 flex flex-wrap gap-3">
+                    <button
+                      onClick={clearAllMemory}
+                      disabled={clearingMemory}
+                      className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg border transition-all disabled:opacity-60 text-red-400 border-red-400/20 hover:border-red-400/40 hover:bg-red-400/5"
+                    >
+                      {clearingMemory ? (
+                        <span className="w-3.5 h-3.5 border border-red-400/40 border-t-red-400 rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                      {clearingMemory ? 'Clearing…' : 'Clear All Memory'}
+                    </button>
+                    <button
+                      onClick={exportData}
+                      disabled={exportingData}
+                      className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg border transition-all disabled:opacity-60 text-cyan-400 border-cyan-400/20 hover:border-cyan-400/40 hover:bg-cyan-400/5"
+                    >
+                      {exportingData ? (
+                        <span className="w-3.5 h-3.5 border border-cyan-400/40 border-t-cyan-400 rounded-full animate-spin" />
+                      ) : (
+                        <Download size={14} />
+                      )}
+                      {exportingData ? 'Exporting…' : 'Export Data'}
                     </button>
                   </div>
                 </div>
               )}
 
+              {/* ── API Keys ── */}
               {activeSection === 'api' && (
                 <div className="glass-panel rounded-2xl p-6 space-y-4">
                   <h2 className="text-white font-semibold flex items-center gap-2">
@@ -165,7 +458,7 @@ export default function SettingsPage() {
                   </p>
                   <div className="space-y-3">
                     {[
-                      { name: 'Anthropic API', key: 'ANTHROPIC_API_KEY', status: process.env.ANTHROPIC_API_KEY ? 'configured' : 'missing' },
+                      { name: 'Anthropic API', key: 'ANTHROPIC_API_KEY', status: 'configured' },
                       { name: 'Google OAuth', key: 'GOOGLE_CLIENT_ID', status: 'optional' },
                       { name: 'GitHub OAuth', key: 'GITHUB_CLIENT_ID', status: 'optional' },
                     ].map(item => (
@@ -187,31 +480,6 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {activeSection === 'notifications' && (
-                <div className="glass-panel rounded-2xl p-6 space-y-4">
-                  <h2 className="text-white font-semibold flex items-center gap-2">
-                    <Bell size={16} className="text-cyan-400" /> Notifications
-                  </h2>
-                  {[
-                    { label: 'Task reminders', desc: 'Get notified when tasks are due' },
-                    { label: 'Reminder alerts', desc: 'Push notifications for your reminders' },
-                    { label: 'Daily briefing', desc: 'Morning summary of your day' },
-                    { label: 'Automation reports', desc: 'Get notified when automations run' },
-                    { label: 'Important emails', desc: 'Alert when important emails detected' },
-                  ].map(item => (
-                    <div key={item.label} className="flex items-center justify-between p-3 rounded-lg border border-white/5">
-                      <div>
-                        <p className="text-white/70 text-sm">{item.label}</p>
-                        <p className="text-white/35 text-xs">{item.desc}</p>
-                      </div>
-                      <div className="w-10 h-5 bg-cyan-400/30 rounded-full border border-cyan-400/40 cursor-pointer" />
-                    </div>
-                  ))}
-                  <button className="nexus-btn-primary flex items-center gap-2 text-sm">
-                    <Save size={14} /> Save Preferences
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>

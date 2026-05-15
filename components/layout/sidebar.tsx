@@ -43,6 +43,7 @@ const navItems = [
   {
     group: 'System',
     items: [
+      { href: '/notifications', icon: Bell, label: 'Notifications', color: 'text-yellow-400' },
       { href: '/activity', icon: Activity, label: 'Activity Log', color: 'text-green-400' },
       { href: '/integrations', icon: Puzzle, label: 'Integrations', color: 'text-blue-400' },
       { href: '/settings', icon: Settings, label: 'Settings', color: 'text-white/60' },

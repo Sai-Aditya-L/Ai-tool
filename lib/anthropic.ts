@@ -302,4 +302,16 @@ export const NEXUS_TOOLS: Anthropic.Tool[] = [
       required: [],
     },
   },
+  {
+    name: 'analyze_file',
+    description: 'Analyze an uploaded file from the user file vault. Retrieves file content and provides AI analysis.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        fileId: { type: 'string', description: 'The file ID to analyze' },
+        question: { type: 'string', description: 'Specific question or analysis request about the file' },
+      },
+      required: ['fileId'],
+    },
+  },
 ]

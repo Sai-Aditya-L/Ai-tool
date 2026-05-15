@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { Bell, Search, Cpu } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSearchContext } from '@/components/search/search-provider'
 
 interface HeaderProps {
   title: string
@@ -15,6 +16,7 @@ export function Header({ title, subtitle }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [unreadCount, setUnreadCount] = useState(0)
   const router = useRouter()
+  const { openPalette } = useSearchContext()
 
   useEffect(() => {
     fetch('/api/notifications?unreadOnly=true')
@@ -26,6 +28,14 @@ export function Header({ title, subtitle }: HeaderProps) {
   const now = new Date()
   const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      openPalette(searchQuery)
+      setSearchQuery('')
+    }
+  }
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-4 px-6 py-3.5 border-b border-cyan-400/10"
@@ -46,22 +56,27 @@ export function Header({ title, subtitle }: HeaderProps) {
       </div>
 
       {/* Search */}
-      <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg border border-cyan-400/10 bg-white/3 w-56 group focus-within:border-cyan-400/30 transition-all">
+      <div
+        className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg border border-cyan-400/10 bg-white/3 w-56 group focus-within:border-cyan-400/30 transition-all cursor-text"
+        onClick={() => openPalette()}
+      >
         <Search size={13} className="text-white/30 group-focus-within:text-cyan-400/60 transition-colors flex-shrink-0" />
         <input
           type="text"
           placeholder="Search NEXUS..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="bg-transparent text-sm text-white/70 placeholder-white/25 outline-none flex-1 w-full"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && searchQuery) {
-              router.push(`/chat?q=${encodeURIComponent(searchQuery)}`)
-              setSearchQuery('')
-            }
+          className="bg-transparent text-sm text-white/70 placeholder-white/25 outline-none flex-1 w-full cursor-pointer"
+          onKeyDown={handleSearchKeyDown}
+          onFocus={(e) => {
+            // Immediately open palette on focus instead of typing in the dummy input
+            e.target.blur()
+            openPalette()
           }}
         />
-        <kbd className="text-white/20 text-[10px] nexus-mono hidden group-focus-within:hidden">⌘K</kbd>
+        <kbd className="text-white/20 text-[10px] nexus-mono border border-white/10 rounded px-1 py-0.5 flex-shrink-0 group-focus-within:opacity-0">
+          ⌘K
+        </kbd>
       </div>
 
       {/* Clock */}
@@ -72,7 +87,7 @@ export function Header({ title, subtitle }: HeaderProps) {
 
       {/* Notifications */}
       <button
-        onClick={() => router.push('/activity')}
+        onClick={() => router.push('/notifications')}
         className="relative p-2 rounded-lg text-white/40 hover:text-cyan-400 hover:bg-cyan-400/5 transition-all border border-transparent hover:border-cyan-400/15"
         title="Notifications"
       >

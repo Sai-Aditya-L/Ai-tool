@@ -45,6 +45,25 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ success: true })
 }
 
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'Missing id query parameter' }, { status: 400 })
+
+  const notification = await prisma.notification.findFirst({ where: { id, userId: user.id } })
+  if (!notification) return NextResponse.json({ error: 'Notification not found' }, { status: 404 })
+
+  await prisma.notification.delete({ where: { id } })
+
+  return NextResponse.json({ success: true })
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

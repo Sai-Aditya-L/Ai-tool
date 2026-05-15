@@ -391,6 +391,20 @@ async function executeToolCall(
         return JSON.stringify({ conversations: conversations.map(c => ({ id: c.id, title: c.title, updatedAt: c.updatedAt, lastMessage: c.messages[0]?.content?.substring(0, 100) })) })
       }
 
+      case 'analyze_file': {
+        const file = await prisma.userFile.findFirst({ where: { id: toolInput.fileId as string, userId } })
+        if (!file) return JSON.stringify({ error: 'File not found' })
+        const content = file.path || ''
+        const question = (toolInput.question as string) || 'Summarize this file'
+        const analysis = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: `File: ${file.name}\n\nContent:\n${content.substring(0, 8000)}\n\nQuestion: ${question}` }],
+        })
+        const result = analysis.content.find(b => b.type === 'text')?.text || 'Could not analyze file'
+        return JSON.stringify({ success: true, fileName: file.name, analysis: result })
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` })
     }

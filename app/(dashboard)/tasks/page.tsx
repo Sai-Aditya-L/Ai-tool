@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, CheckSquare, Clock, Tag, AlertCircle, Trash2, Check, Edit2, X, ChevronDown } from 'lucide-react'
+import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -19,6 +19,409 @@ interface Task {
 
 const PRIORITIES = ['urgent', 'high', 'medium', 'low']
 const STATUSES = ['pending', 'in_progress', 'completed', 'cancelled']
+
+const priorityColors: Record<string, string> = {
+  urgent: 'border-l-red-500',
+  high: 'border-l-orange-500',
+  medium: 'border-l-yellow-500',
+  low: 'border-l-green-500',
+}
+
+// ─── Edit Modal ────────────────────────────────────────────────────────────────
+
+interface EditModalProps {
+  task: Task
+  onClose: () => void
+  onSave: (updated: Task) => void
+}
+
+function EditModal({ task, onClose, onSave }: EditModalProps) {
+  const [form, setForm] = useState({
+    title: task.title,
+    description: task.description ?? '',
+    priority: task.priority,
+    status: task.status,
+    dueDate: task.dueDate ? task.dueDate.slice(0, 16) : '',
+    tags: task.tags ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.title.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title,
+          description: form.description || undefined,
+          priority: form.priority,
+          status: form.status,
+          dueDate: form.dueDate || null,
+          tags: form.tags || undefined,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      toast.success('Task updated')
+      onSave(data.task)
+    } catch {
+      toast.error('Failed to update task')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Close on backdrop click
+  function handleBackdrop(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      onClick={handleBackdrop}
+    >
+      <div className="glass-panel rounded-2xl p-6 w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-white font-semibold flex items-center gap-2">
+            <Edit2 size={16} className="text-cyan-400" />
+            Edit Task
+          </h2>
+          <button onClick={onClose} className="text-white/30 hover:text-white/70 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-3">
+          <input
+            type="text"
+            placeholder="Task title *"
+            value={form.title}
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            required
+            className="nexus-input"
+            autoFocus
+          />
+          <textarea
+            placeholder="Description (optional)"
+            value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            rows={3}
+            className="nexus-input resize-none"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <select
+              value={form.priority}
+              onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}
+              className="nexus-input"
+            >
+              {PRIORITIES.map(p => (
+                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)} Priority</option>
+              ))}
+            </select>
+            <select
+              value={form.status}
+              onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+              className="nexus-input"
+            >
+              {STATUSES.map(s => (
+                <option key={s} value={s}>{s.replace('_', ' ')}</option>
+              ))}
+            </select>
+          </div>
+          <input
+            type="datetime-local"
+            value={form.dueDate}
+            onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
+            className="nexus-input"
+          />
+          <input
+            type="text"
+            placeholder="Tags (comma separated)"
+            value={form.tags}
+            onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
+            className="nexus-input"
+          />
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={saving} className="nexus-btn-primary flex-1">
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+            <button type="button" onClick={onClose} className="nexus-btn-secondary px-5">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Subtask Row ───────────────────────────────────────────────────────────────
+
+interface SubtaskRowProps {
+  subtask: Task
+  onComplete: (id: string, completed: boolean) => void
+  onDelete: (id: string) => void
+}
+
+function SubtaskRow({ subtask, onComplete, onDelete }: SubtaskRowProps) {
+  return (
+    <div className="flex items-center gap-2 py-1.5 group">
+      <button
+        onClick={() => onComplete(subtask.id, subtask.status !== 'completed')}
+        className={cn(
+          'w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all',
+          subtask.status === 'completed'
+            ? 'bg-green-400/20 border-green-400/50'
+            : 'border-white/20 hover:border-cyan-400/50'
+        )}
+      >
+        {subtask.status === 'completed' && <Check size={9} className="text-green-400" />}
+      </button>
+      <span className={cn(
+        'flex-1 text-xs',
+        subtask.status === 'completed' ? 'line-through text-white/25' : 'text-white/60'
+      )}>
+        {subtask.title}
+      </span>
+      <button
+        onClick={() => onDelete(subtask.id)}
+        className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 transition-all p-0.5"
+      >
+        <X size={11} />
+      </button>
+    </div>
+  )
+}
+
+// ─── Task Row ──────────────────────────────────────────────────────────────────
+
+interface TaskRowProps {
+  task: Task
+  onStatusChange: (id: string, status: string) => void
+  onDelete: (id: string) => void
+  onEdit: (task: Task) => void
+  onTaskUpdate: (updated: Task) => void
+}
+
+function TaskRow({ task, onStatusChange, onDelete, onEdit, onTaskUpdate }: TaskRowProps) {
+  const [expanded, setExpanded] = useState(false)
+  const [subtasks, setSubtasks] = useState<Task[]>(task.subtasks ?? [])
+  const [newSubtask, setNewSubtask] = useState('')
+  const [addingSubtask, setAddingSubtask] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const completedCount = subtasks.filter(s => s.status === 'completed').length
+
+  // Keep subtasks in sync when parent task changes (e.g. after edit)
+  useEffect(() => {
+    setSubtasks(task.subtasks ?? [])
+  }, [task.subtasks])
+
+  function toggleExpand() {
+    setExpanded(prev => !prev)
+  }
+
+  async function addSubtask(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return
+    const title = newSubtask.trim()
+    if (!title) return
+
+    setAddingSubtask(true)
+    // Optimistic add with a temp id
+    const tempId = `temp-${Date.now()}`
+    const optimistic: Task = { id: tempId, title, status: 'pending', priority: 'medium' }
+    setSubtasks(prev => [...prev, optimistic])
+    setNewSubtask('')
+
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, parentId: task.id, priority: 'medium' }),
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      // Replace temp with real
+      setSubtasks(prev => prev.map(s => s.id === tempId ? data.task : s))
+      // Update parent task count in parent state
+      onTaskUpdate({ ...task, subtasks: [...(task.subtasks ?? []).filter(s => s.id !== tempId), data.task] })
+    } catch {
+      setSubtasks(prev => prev.filter(s => s.id !== tempId))
+      toast.error('Failed to add subtask')
+    } finally {
+      setAddingSubtask(false)
+    }
+  }
+
+  async function completeSubtask(id: string, complete: boolean) {
+    const status = complete ? 'completed' : 'pending'
+    // Optimistic
+    setSubtasks(prev => prev.map(s => s.id === id ? { ...s, status } : s))
+    try {
+      await fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+    } catch {
+      // Rollback
+      setSubtasks(prev => prev.map(s => s.id === id ? { ...s, status: complete ? 'pending' : 'completed' } : s))
+      toast.error('Failed to update subtask')
+    }
+  }
+
+  async function deleteSubtask(id: string) {
+    // Optimistic
+    const prev = subtasks
+    setSubtasks(prevList => prevList.filter(s => s.id !== id))
+    try {
+      await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
+    } catch {
+      setSubtasks(prev)
+      toast.error('Failed to delete subtask')
+    }
+  }
+
+  const hasSubtasks = subtasks.length > 0
+
+  return (
+    <div className={cn(
+      'glass-panel-hover rounded-xl border-l-2 transition-all',
+      priorityColors[task.priority] || 'border-l-white/10'
+    )}>
+      {/* Main task row */}
+      <div className="flex items-start gap-3 p-4">
+        {/* Expand toggle */}
+        <button
+          onClick={toggleExpand}
+          className={cn(
+            'mt-0.5 flex-shrink-0 transition-colors',
+            hasSubtasks || expanded
+              ? 'text-white/40 hover:text-cyan-400'
+              : 'text-white/10 hover:text-white/30'
+          )}
+        >
+          {expanded
+            ? <ChevronDown size={14} />
+            : <ChevronRight size={14} />
+          }
+        </button>
+
+        {/* Checkbox */}
+        <button
+          onClick={() => onStatusChange(task.id, task.status === 'completed' ? 'pending' : 'completed')}
+          className={cn(
+            'mt-0.5 w-5 h-5 rounded-md border-2 flex-shrink-0 flex items-center justify-center transition-all',
+            task.status === 'completed'
+              ? 'bg-green-400/20 border-green-400/50'
+              : 'border-white/20 hover:border-cyan-400/50'
+          )}
+        >
+          {task.status === 'completed' && <Check size={12} className="text-green-400" />}
+        </button>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <p className={cn(
+              'text-sm font-medium',
+              task.status === 'completed' ? 'line-through text-white/30' : 'text-white/85'
+            )}>
+              {task.title}
+            </p>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className={cn(
+                'text-xs px-2 py-0.5 rounded-full border',
+                getPriorityColor(task.priority)
+              )}>
+                {task.priority}
+              </span>
+              <button
+                onClick={() => onEdit(task)}
+                className="text-white/20 hover:text-cyan-400 transition-colors p-1"
+                title="Edit task"
+              >
+                <Edit2 size={12} />
+              </button>
+              <button
+                onClick={() => onDelete(task.id)}
+                className="text-white/20 hover:text-red-400 transition-colors p-1"
+                title="Delete task"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          </div>
+
+          {task.description && (
+            <p className="text-white/40 text-xs mt-1">{task.description}</p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 mt-2">
+            {task.dueDate && (
+              <span className="text-white/35 text-xs flex items-center gap-1">
+                <Clock size={10} />
+                {formatDate(task.dueDate)}
+              </span>
+            )}
+            {task.tags && (
+              <span className="text-white/35 text-xs flex items-center gap-1">
+                <Tag size={10} />
+                {task.tags.split(',').map((t: string) => t.trim()).join(' · ')}
+              </span>
+            )}
+            {subtasks.length > 0 && (
+              <span className="text-cyan-400/50 text-xs">
+                {completedCount}/{subtasks.length} subtasks
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded subtask section */}
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-white/5 pt-3 ml-8">
+          {subtasks.length > 0 ? (
+            <div className="divide-y divide-white/5">
+              {subtasks.map(sub => (
+                <SubtaskRow
+                  key={sub.id}
+                  subtask={sub}
+                  onComplete={completeSubtask}
+                  onDelete={deleteSubtask}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-white/20 text-xs mb-2">No subtasks yet</p>
+          )}
+
+          {/* Add subtask input */}
+          <div className="mt-2 flex items-center gap-2">
+            <Plus size={11} className="text-white/25 flex-shrink-0" />
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Add subtask… (press Enter)"
+              value={newSubtask}
+              onChange={e => setNewSubtask(e.target.value)}
+              onKeyDown={addSubtask}
+              disabled={addingSubtask}
+              className="flex-1 bg-transparent border-0 border-b border-white/10 focus:border-cyan-400/40 text-xs text-white/60 placeholder:text-white/20 outline-none py-1 transition-colors"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -90,11 +493,13 @@ export default function TasksPage() {
     }
   }
 
-  const priorityColors: Record<string, string> = {
-    urgent: 'border-l-red-500',
-    high: 'border-l-orange-500',
-    medium: 'border-l-yellow-500',
-    low: 'border-l-green-500',
+  function handleEditSave(updated: Task) {
+    setTasks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))
+    setEditingTask(null)
+  }
+
+  function handleTaskUpdate(updated: Task) {
+    setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
   }
 
   return (
@@ -212,81 +617,28 @@ export default function TasksPage() {
           ) : (
             <div className="space-y-2">
               {tasks.map(task => (
-                <div
+                <TaskRow
                   key={task.id}
-                  className={cn(
-                    'glass-panel-hover rounded-xl p-4 border-l-2 flex items-start gap-3',
-                    priorityColors[task.priority] || 'border-l-white/10'
-                  )}
-                >
-                  {/* Checkbox */}
-                  <button
-                    onClick={() => updateTaskStatus(task.id, task.status === 'completed' ? 'pending' : 'completed')}
-                    className={cn(
-                      'mt-0.5 w-5 h-5 rounded-md border-2 flex-shrink-0 flex items-center justify-center transition-all',
-                      task.status === 'completed'
-                        ? 'bg-green-400/20 border-green-400/50'
-                        : 'border-white/20 hover:border-cyan-400/50'
-                    )}
-                  >
-                    {task.status === 'completed' && <Check size={12} className="text-green-400" />}
-                  </button>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={cn(
-                        'text-sm font-medium',
-                        task.status === 'completed' ? 'line-through text-white/30' : 'text-white/85'
-                      )}>
-                        {task.title}
-                      </p>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <span className={cn(
-                          'text-xs px-2 py-0.5 rounded-full border',
-                          getPriorityColor(task.priority)
-                        )}>
-                          {task.priority}
-                        </span>
-                        <button
-                          onClick={() => deleteTask(task.id)}
-                          className="text-white/20 hover:text-red-400 transition-colors p-1"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {task.description && (
-                      <p className="text-white/40 text-xs mt-1">{task.description}</p>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-3 mt-2">
-                      {task.dueDate && (
-                        <span className="text-white/35 text-xs flex items-center gap-1">
-                          <Clock size={10} />
-                          {formatDate(task.dueDate)}
-                        </span>
-                      )}
-                      {task.tags && (
-                        <span className="text-white/35 text-xs flex items-center gap-1">
-                          <Tag size={10} />
-                          {task.tags.split(',').map((t: string) => t.trim()).join(' · ')}
-                        </span>
-                      )}
-                      {task.subtasks && task.subtasks.length > 0 && (
-                        <span className="text-cyan-400/50 text-xs">
-                          {task.subtasks.filter((s: Task) => s.status === 'completed').length}/{task.subtasks.length} subtasks
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                  task={task}
+                  onStatusChange={updateTaskStatus}
+                  onDelete={deleteTask}
+                  onEdit={setEditingTask}
+                  onTaskUpdate={handleTaskUpdate}
+                />
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {/* Edit modal */}
+      {editingTask && (
+        <EditModal
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onSave={handleEditSave}
+        />
+      )}
     </div>
   )
 }
