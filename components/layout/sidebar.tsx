@@ -9,7 +9,8 @@ import {
   FileText, Brain, FolderOpen, BarChart2, Zap, Activity,
   Puzzle, Settings, LogOut, Mic, ChevronLeft, ChevronRight,
   StickyNote, Mail, Bot, Code2, Wifi, Sparkles, Newspaper, TrendingUp,
-  Wrench, BrainCircuit, Monitor, Music2, Home, FlameKindling
+  Wrench, BrainCircuit, Monitor, Music2, Home, FlameKindling,
+  Shield, Target, Network, Microscope, Plane, Lock, BookOpen
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -32,13 +33,18 @@ const navItems = [
       { href: '/emails', icon: Mail, label: 'Emails', color: 'text-cyan-400' },
       { href: '/notes', icon: StickyNote, label: 'Notes', color: 'text-pink-400' },
       { href: '/habits', icon: FlameKindling, label: 'Habits', color: 'text-orange-400' },
+      { href: '/goals', icon: Target, label: 'Goals', color: 'text-pink-400' },
     ],
   },
   {
     group: 'Intelligence',
     items: [
       { href: '/memory', icon: Brain, label: 'Memory', color: 'text-violet-400' },
+      { href: '/knowledge-graph', icon: Network, label: 'Knowledge Graph', color: 'text-violet-400' },
       { href: '/daily-summaries', icon: Sparkles, label: 'Daily Briefing', color: 'text-cyan-400' },
+      { href: '/research', icon: Microscope, label: 'Research', color: 'text-violet-400' },
+      { href: '/travel', icon: Plane, label: 'Travel', color: 'text-sky-400' },
+      { href: '/cybersecurity', icon: Shield, label: 'Cybersecurity', color: 'text-red-400' },
       { href: '/trackers', icon: BarChart2, label: 'Trackers', color: 'text-orange-400' },
       { href: '/automations', icon: Zap, label: 'Automations', color: 'text-yellow-400' },
       { href: '/dev', icon: Code2, label: 'Dev Workspace', color: 'text-orange-400' },
@@ -54,6 +60,7 @@ const navItems = [
     items: [
       { href: '/media', icon: Music2, label: 'Media Center', color: 'text-green-400' },
       { href: '/home-control', icon: Home, label: 'Home Control', color: 'text-amber-400' },
+      { href: '/trust-center', icon: Lock, label: 'Trust Center', color: 'text-green-400' },
       { href: '/notifications', icon: Bell, label: 'Notifications', color: 'text-yellow-400' },
       { href: '/activity', icon: Activity, label: 'Activity Log', color: 'text-green-400' },
       { href: '/integrations', icon: Puzzle, label: 'Integrations', color: 'text-blue-400' },
