@@ -405,6 +405,36 @@ async function executeToolCall(
         return JSON.stringify({ success: true, fileName: file.name, analysis: result })
       }
 
+      case 'list_agents': {
+        const agents = await prisma.agent.findMany({
+          where: { userId, ...(toolInput.status ? { status: toolInput.status as string } : {}) },
+          include: { runs: { orderBy: { createdAt: 'desc' }, take: 1 } },
+          orderBy: { updatedAt: 'desc' },
+          take: 10,
+        })
+        return JSON.stringify({ agents: agents.map(a => ({ id: a.id, name: a.name, role: a.role, status: a.status, lastRun: a.runs[0]?.status })) })
+      }
+
+      case 'spawn_agent': {
+        const agent = await prisma.agent.findFirst({ where: { userId, name: { contains: toolInput.agentName as string } } })
+        if (!agent) return JSON.stringify({ error: `Agent "${toolInput.agentName}" not found. Deploy it first from the Agent Command Center.` })
+        const run = await prisma.agentRun.create({
+          data: { agentId: agent.id, userId, task: toolInput.task as string, status: 'waiting', startedAt: new Date() },
+        })
+        return JSON.stringify({ success: true, message: `Agent ${agent.name} queued. Task: "${toolInput.task}". Run ID: ${run.id}. Open Agent Command Center to monitor progress.`, runId: run.id })
+      }
+
+      case 'analyze_code': {
+        const codeReview = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2048,
+          system: 'You are Forge, an expert code reviewer. Analyze the provided code for security vulnerabilities, performance issues, style problems, and logic errors. Be concise and specific.',
+          messages: [{ role: 'user', content: `Language: ${toolInput.language || 'auto-detect'}\nFocus: ${toolInput.focus || 'all'}\n\nCode:\n\`\`\`\n${(toolInput.code as string).substring(0, 8000)}\n\`\`\`` }],
+        })
+        const review = codeReview.content.find(b => b.type === 'text')?.text || 'Could not analyze code'
+        return JSON.stringify({ success: true, review })
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` })
     }

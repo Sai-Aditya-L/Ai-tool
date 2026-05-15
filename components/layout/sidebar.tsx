@@ -8,7 +8,7 @@ import {
   LayoutDashboard, MessageSquare, CheckSquare, Bell, Calendar,
   FileText, Brain, FolderOpen, BarChart2, Zap, Activity,
   Puzzle, Settings, LogOut, Mic, ChevronLeft, ChevronRight,
-  StickyNote, Mail
+  StickyNote, Mail, Bot, Code2
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -19,6 +19,7 @@ const navItems = [
       { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', color: 'text-cyan-400' },
       { href: '/chat', icon: MessageSquare, label: 'AI Chat', color: 'text-violet-400' },
       { href: '/voice', icon: Mic, label: 'Voice Center', color: 'text-cyan-400' },
+      { href: '/agents', icon: Bot, label: 'Agent Center', color: 'text-violet-400' },
     ],
   },
   {
@@ -37,6 +38,7 @@ const navItems = [
       { href: '/memory', icon: Brain, label: 'Memory', color: 'text-violet-400' },
       { href: '/trackers', icon: BarChart2, label: 'Trackers', color: 'text-orange-400' },
       { href: '/automations', icon: Zap, label: 'Automations', color: 'text-yellow-400' },
+      { href: '/dev', icon: Code2, label: 'Dev Workspace', color: 'text-orange-400' },
       { href: '/files', icon: FolderOpen, label: 'Files', color: 'text-cyan-400' },
     ],
   },

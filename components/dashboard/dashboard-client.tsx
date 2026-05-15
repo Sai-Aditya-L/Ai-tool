@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { formatDate, formatRelativeTime } from '@/lib/utils'
 import Link from 'next/link'
-import { CheckSquare, Bell, Activity, BarChart2, ChevronRight, Check, Clock, Mail, Layers } from 'lucide-react'
+import { CheckSquare, Bell, Activity, BarChart2, ChevronRight, Check, Clock, Mail, Layers, Bot } from 'lucide-react'
 
 interface DashboardClientProps {
   initialData: {
@@ -21,6 +21,7 @@ interface DashboardClientProps {
       recentTasks: any[]
       trackers: any[]
       recentFiles: any[]
+      agentRuns: any[]
     }
   }
   userId: string
@@ -208,6 +209,48 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
             Go to Integrations
           </Link>
         </div>
+      </div>
+
+      {/* Agent Activity Widget */}
+      <div className="glass-panel-hover rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Bot size={14} className="text-violet-400" />
+            <h3 className="text-white/70 text-sm font-medium">Agent Activity</h3>
+          </div>
+          <Link href="/agents" className="text-cyan-400/50 text-xs hover:text-cyan-400 flex items-center gap-1 transition-colors">
+            Command Center <ChevronRight size={12} />
+          </Link>
+        </div>
+        {data.agentRuns.length === 0 ? (
+          <div className="text-center py-6">
+            <p className="text-white/30 text-sm">No agent activity</p>
+            <Link href="/agents" className="text-cyan-400/60 text-xs mt-2 inline-block hover:text-cyan-400">
+              Deploy your first agent →
+            </Link>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {data.agentRuns.slice(0, 4).map((run: any) => (
+              <li key={run.id} className="flex items-center gap-3">
+                <span className="text-lg flex-shrink-0">{run.agent?.avatar || '🤖'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white/80 truncate">{run.agent?.name || 'Agent'}</p>
+                  <p className="text-white/30 text-xs truncate">{run.task}</p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${
+                  run.status === 'completed' ? 'text-green-400 border-green-400/30' :
+                  run.status === 'running' ? 'text-cyan-400 border-cyan-400/30' :
+                  run.status === 'failed' ? 'text-red-400 border-red-400/30' :
+                  run.status === 'needs_approval' ? 'text-yellow-400 border-yellow-400/30' :
+                  'text-white/30 border-white/15'
+                }`}>
+                  {run.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Activity Feed */}

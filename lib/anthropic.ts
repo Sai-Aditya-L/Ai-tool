@@ -314,4 +314,40 @@ export const NEXUS_TOOLS: Anthropic.Tool[] = [
       required: ['fileId'],
     },
   },
+  {
+    name: 'list_agents',
+    description: 'List all deployed AI agents for the user',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        status: { type: 'string', description: 'Filter by status: idle, running, completed, failed' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'spawn_agent',
+    description: 'Spawn a specialized AI agent to run a task',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        agentName: { type: 'string', description: 'Name of the agent to spawn (e.g. Forge, Atlas, Oracle)' },
+        task: { type: 'string', description: 'Task description for the agent to complete' },
+      },
+      required: ['agentName', 'task'],
+    },
+  },
+  {
+    name: 'analyze_code',
+    description: 'Analyze and review code for issues, security vulnerabilities, and improvements',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        code: { type: 'string', description: 'The code to analyze' },
+        language: { type: 'string', description: 'Programming language' },
+        focus: { type: 'string', description: 'Focus area: security, performance, style, all' },
+      },
+      required: ['code'],
+    },
+  },
 ]

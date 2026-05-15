@@ -29,6 +29,7 @@ export default async function DashboardPage() {
     trackers,
     unreadNotifications,
     upcomingFiles,
+    agentRuns,
   ] = await Promise.all([
     prisma.task.count({ where: { userId: user!.id, status: { in: ['pending', 'in_progress'] } } }),
     prisma.task.count({ where: { userId: user!.id, status: 'completed', completedAt: { gte: startOfDay } } }),
@@ -62,11 +63,12 @@ export default async function DashboardPage() {
     }),
     prisma.notification.count({ where: { userId: user!.id, read: false } }),
     prisma.userFile.findMany({ where: { userId: user!.id }, orderBy: { createdAt: 'desc' }, take: 3 }),
+    prisma.agentRun.findMany({ where: { userId: user!.id }, orderBy: { createdAt: 'desc' }, take: 5, include: { agent: true } }),
   ])
 
   const dashData = {
     stats: { pendingTasks, completedToday, todayRemindersCount: todayReminders.length, unreadNotifications },
-    data: { todayReminders, upcomingReminders, recentActivity, urgentTasks, recentTasks, trackers, recentFiles: upcomingFiles },
+    data: { todayReminders, upcomingReminders, recentActivity, urgentTasks, recentTasks, trackers, recentFiles: upcomingFiles, agentRuns },
   }
 
   return (
