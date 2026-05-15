@@ -95,7 +95,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Stats row */}
-          <div className="glass-panel-hover rounded-2xl p-5">
+          <div className="hud-stat-card rounded-xl p-5">
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Pending Tasks</div>
               <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center">
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
             <div className="text-green-400 text-xs">{completedToday} completed today</div>
           </div>
 
-          <div className="glass-panel-hover rounded-2xl p-5">
+          <div className="hud-stat-card rounded-xl p-5">
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Today&apos;s Reminders</div>
               <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center">
@@ -117,7 +117,7 @@ export default async function DashboardPage() {
             <div className="text-cyan-400/60 text-xs">{upcomingReminders.length} upcoming total</div>
           </div>
 
-          <div className="glass-panel-hover rounded-2xl p-5">
+          <div className="hud-stat-card rounded-xl p-5">
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Urgent Tasks</div>
               <div className="w-8 h-8 rounded-lg bg-red-400/10 flex items-center justify-center">
@@ -129,7 +129,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Unread Notifications stat card */}
-          <div className="glass-panel-hover rounded-2xl p-5">
+          <div className="hud-stat-card rounded-xl p-5">
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Unread Notifications</div>
               <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center">
@@ -141,7 +141,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Unread Emails stat card */}
-          <div className="glass-panel-hover rounded-2xl p-5">
+          <div className="hud-stat-card rounded-xl p-5">
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Unread Emails</div>
               <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center">

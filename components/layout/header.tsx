@@ -38,17 +38,13 @@ export function Header({ title, subtitle }: HeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-4 px-6 py-3.5 border-b border-cyan-400/10"
-      style={{
-        background: 'rgba(5, 5, 16, 0.9)',
-        backdropFilter: 'blur(20px)',
-      }}
+    <header className="hud-header sticky top-0 z-20 flex items-center gap-4 px-6 py-3.5"
     >
       {/* Page title */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <Cpu size={14} className="text-cyan-400/60 flex-shrink-0" />
-          <h1 className="text-white font-semibold text-base truncate">{title}</h1>
+          <h1 className="font-semibold text-base truncate hud-text-cyan" style={{letterSpacing:'0.05em'}}>{title}</h1>
         </div>
         {subtitle && (
           <p className="text-white/40 text-xs mt-0.5 nexus-mono">{subtitle}</p>
@@ -57,7 +53,7 @@ export function Header({ title, subtitle }: HeaderProps) {
 
       {/* Search */}
       <div
-        className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg border border-cyan-400/10 bg-white/3 w-56 group focus-within:border-cyan-400/30 transition-all cursor-text"
+        className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg border border-cyan-400/15 bg-white/3 w-56 group focus-within:border-cyan-400/30 transition-all cursor-text"
         onClick={() => openPalette()}
       >
         <Search size={13} className="text-white/30 group-focus-within:text-cyan-400/60 transition-colors flex-shrink-0" />
@@ -80,9 +76,9 @@ export function Header({ title, subtitle }: HeaderProps) {
       </div>
 
       {/* Clock */}
-      <div className="hidden lg:flex flex-col items-end">
-        <span className="text-white/70 text-sm font-mono">{timeStr}</span>
-        <span className="text-white/30 text-[10px] nexus-mono">{dateStr}</span>
+      <div className="hidden lg:flex flex-col items-end pl-4 border-l border-cyan-400/10">
+        <span className="hud-value text-sm">{timeStr}</span>
+        <span className="hud-label text-[10px] opacity-50">{dateStr}</span>
       </div>
 
       {/* Notifications */}
