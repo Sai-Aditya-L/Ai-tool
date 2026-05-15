@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight, Square, CheckSquare as CheckSquareIcon } from 'lucide-react'
+import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -616,7 +616,7 @@ export default function TasksPage() {
                   : 'text-white/40 border-white/10 hover:border-white/20 hover:text-white/60'
               )}
             >
-              <CheckSquareIcon size={14} />
+              <CheckSquare size={14} />
               Select
             </button>
 
