@@ -8,7 +8,8 @@ import {
   LayoutDashboard, MessageSquare, CheckSquare, Bell, Calendar,
   FileText, Brain, FolderOpen, BarChart2, Zap, Activity,
   Puzzle, Settings, LogOut, Mic, ChevronLeft, ChevronRight,
-  StickyNote, Mail, Bot, Code2, Wifi, Sparkles, Newspaper, TrendingUp
+  StickyNote, Mail, Bot, Code2, Wifi, Sparkles, Newspaper, TrendingUp,
+  Wrench, BrainCircuit
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -43,6 +44,8 @@ const navItems = [
       { href: '/files', icon: FolderOpen, label: 'Files', color: 'text-cyan-400' },
       { href: '/news', icon: Newspaper, label: 'News Feed', color: 'text-blue-400' },
       { href: '/market', icon: TrendingUp, label: 'Market', color: 'text-amber-400' },
+      { href: '/tools', icon: Wrench, label: 'Tools', color: 'text-cyan-400' },
+      { href: '/alerts', icon: BrainCircuit, label: 'Proactive Alerts', color: 'text-violet-400' },
     ],
   },
   {

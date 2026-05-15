@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Header } from '@/components/layout/header'
 import { Mic, MicOff, Volume2, MessageSquare, Settings, X, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -34,6 +34,12 @@ export default function VoicePage() {
 
   // Auto-read toggle
   const [autoRead, setAutoRead] = useState(true)
+
+  // Wake-word mode
+  const [wakeWordMode, setWakeWordMode] = useState(false)
+  const [wakeWordActive, setWakeWordActive] = useState(false)
+  const wakeWordRef = useRef<any>(null)
+  const WAKE_WORDS = ['nexus', 'hey nexus', 'ok nexus']
 
   // Keyboard shortcut tracking
   const spaceHeldRef = useRef(false)
@@ -96,6 +102,14 @@ export default function VoicePage() {
     }
   }, [supported]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Cleanup wake-word listener on unmount — use ref to avoid forward-reference error
+  useEffect(() => {
+    return () => {
+      try { wakeWordRef.current?.stop() } catch {}
+      wakeWordRef.current = null
+    }
+  }, [])
+
   function startRecording() {
     if (!supported) {
       toast.error('Speech recognition not supported in this browser. Use Chrome or Edge.')
@@ -133,6 +147,66 @@ export default function VoicePage() {
   function stopRecording() {
     recognitionRef.current?.stop()
     setIsRecording(false)
+  }
+
+  const startWakeWordListening = useCallback(() => {
+    if (typeof window === 'undefined') return
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) return
+
+    const wr = new SpeechRecognition()
+    wr.continuous = true
+    wr.interimResults = true
+    wr.lang = 'en-US'
+    wakeWordRef.current = wr
+
+    wr.onresult = (event: any) => {
+      const last = event.results[event.results.length - 1]
+      const text = last[0].transcript.toLowerCase().trim()
+      const detected = WAKE_WORDS.some(w => text.includes(w))
+      if (detected) {
+        setWakeWordActive(false)
+        setTimeout(() => {
+          if (typeof window !== 'undefined' && window.speechSynthesis) {
+            const utterance = new SpeechSynthesisUtterance('Yes?')
+            utterance.rate = 1.1
+            window.speechSynthesis.speak(utterance)
+          }
+          startRecording()
+        }, 400)
+      }
+    }
+
+    wr.onerror = () => {
+      if (wakeWordRef.current) {
+        setTimeout(() => { try { wr.start() } catch {} }, 1000)
+      }
+    }
+
+    wr.onend = () => {
+      if (wakeWordRef.current) {
+        setTimeout(() => { try { wr.start() } catch {} }, 500)
+      }
+    }
+
+    try { wr.start() } catch {}
+    setWakeWordActive(true)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const stopWakeWordListening = useCallback(() => {
+    try { wakeWordRef.current?.stop() } catch {}
+    wakeWordRef.current = null
+    setWakeWordActive(false)
+  }, [])
+
+  const toggleWakeWordMode = () => {
+    if (wakeWordMode) {
+      stopWakeWordListening()
+      setWakeWordMode(false)
+    } else {
+      setWakeWordMode(true)
+      startWakeWordListening()
+    }
   }
 
   async function sendToNexus(text: string) {
