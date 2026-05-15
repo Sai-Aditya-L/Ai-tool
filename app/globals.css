@@ -1,0 +1,264 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@layer base {
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 191 100% 50%;
+    --primary-foreground: 240 10% 3.9%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 270 76% 58%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 191 100% 50%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-nexus-darker text-foreground;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(10, 10, 26, 0.5);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 212, 255, 0.3);
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 212, 255, 0.5);
+  }
+
+  ::selection {
+    background: rgba(0, 212, 255, 0.3);
+    color: #fff;
+  }
+}
+
+@layer components {
+  /* Glass Panel */
+  .glass-panel {
+    @apply backdrop-blur-md border;
+    background: rgba(10, 10, 26, 0.7);
+    border-color: rgba(0, 212, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-panel-hover {
+    @apply glass-panel transition-all duration-300;
+  }
+
+  .glass-panel-hover:hover {
+    border-color: rgba(0, 212, 255, 0.25);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 212, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* Nexus Border */
+  .nexus-border {
+    border: 1px solid rgba(0, 212, 255, 0.15);
+  }
+
+  .nexus-border-glow {
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.1), inset 0 0 15px rgba(0, 212, 255, 0.03);
+  }
+
+  /* Nexus Text */
+  .nexus-text-primary {
+    color: #00d4ff;
+  }
+
+  .nexus-text-gradient {
+    background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .nexus-text-gold {
+    color: #f59e0b;
+  }
+
+  /* Nexus Buttons */
+  .nexus-btn-primary {
+    @apply relative px-6 py-2.5 rounded-lg font-medium transition-all duration-300 overflow-hidden;
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%);
+    border: 1px solid rgba(0, 212, 255, 0.4);
+    color: #00d4ff;
+  }
+
+  .nexus-btn-primary:hover {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.35) 0%, rgba(124, 58, 237, 0.35) 100%);
+    border-color: rgba(0, 212, 255, 0.7);
+    box-shadow: 0 0 25px rgba(0, 212, 255, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .nexus-btn-secondary {
+    @apply relative px-6 py-2.5 rounded-lg font-medium transition-all duration-300;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .nexus-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  /* Input Styles */
+  .nexus-input {
+    @apply w-full px-4 py-3 rounded-lg outline-none transition-all duration-200 text-white placeholder-white/30;
+    background: rgba(10, 10, 26, 0.8);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .nexus-input:focus {
+    border-color: rgba(0, 212, 255, 0.5);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.08), 0 0 20px rgba(0, 212, 255, 0.1);
+  }
+
+  /* Grid Background */
+  .nexus-grid-bg {
+    background-image:
+      linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  /* Glow Effects */
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3), 0 0 40px rgba(0, 212, 255, 0.1);
+  }
+
+  .glow-violet {
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.3), 0 0 40px rgba(124, 58, 237, 0.1);
+  }
+
+  .glow-gold {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.3), 0 0 40px rgba(245, 158, 11, 0.1);
+  }
+
+  /* Scanning Line */
+  .scan-line {
+    @apply absolute left-0 right-0 h-px pointer-events-none;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.6), transparent);
+    animation: scan-line 4s linear infinite;
+  }
+
+  /* Priority badges */
+  .badge-urgent { @apply text-red-400 bg-red-400/10 border border-red-400/30 text-xs px-2 py-0.5 rounded-full; }
+  .badge-high { @apply text-orange-400 bg-orange-400/10 border border-orange-400/30 text-xs px-2 py-0.5 rounded-full; }
+  .badge-medium { @apply text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 text-xs px-2 py-0.5 rounded-full; }
+  .badge-low { @apply text-green-400 bg-green-400/10 border border-green-400/30 text-xs px-2 py-0.5 rounded-full; }
+
+  /* Status badges */
+  .badge-pending { @apply text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 text-xs px-2 py-0.5 rounded-full; }
+  .badge-completed { @apply text-green-400 bg-green-400/10 border border-green-400/30 text-xs px-2 py-0.5 rounded-full; }
+  .badge-in-progress { @apply text-blue-400 bg-blue-400/10 border border-blue-400/30 text-xs px-2 py-0.5 rounded-full; }
+  .badge-cancelled { @apply text-gray-400 bg-gray-400/10 border border-gray-400/30 text-xs px-2 py-0.5 rounded-full; }
+
+  /* Typography */
+  .nexus-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Particle canvas overlay */
+  .particle-overlay {
+    @apply fixed inset-0 pointer-events-none;
+    z-index: 0;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Custom animations */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes orbPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.05);
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes dataStream {
+  0% { transform: translateY(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+@keyframes holographicFlicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.8; }
+  94% { opacity: 1; }
+  96% { opacity: 0.9; }
+  97% { opacity: 1; }
+}
+
+.orb-pulse { animation: orbPulse 3s ease-in-out infinite; }
+.holographic { animation: holographicFlicker 8s infinite; }
+.gradient-animate {
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+}

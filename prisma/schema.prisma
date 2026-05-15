@@ -1,0 +1,261 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  tasks         Task[]
+  reminders     Reminder[]
+  memories      Memory[]
+  conversations Conversation[]
+  notes         Note[]
+  trackers      Tracker[]
+  activityLogs  ActivityLog[]
+  integrations  Integration[]
+  automations   Automation[]
+  userFiles     UserFile[]
+  preferences   UserPreferences?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model UserPreferences {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  theme           String   @default("dark")
+  assistantName   String   @default("NEXUS")
+  voiceEnabled    Boolean  @default(true)
+  notificationsOn Boolean  @default(true)
+  timezone        String   @default("UTC")
+  language        String   @default("en")
+  aiModel         String   @default("claude-sonnet-4-6")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  status      String    @default("pending")
+  priority    String    @default("medium")
+  dueDate     DateTime?
+  tags        String?
+  parentId    String?
+  recurring   Boolean   @default(false)
+  recurrenceRule String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   Task?  @relation("SubTasks", fields: [parentId], references: [id])
+  subtasks Task[] @relation("SubTasks")
+}
+
+model Reminder {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  dueAt       DateTime
+  status      String   @default("pending")
+  priority    String   @default("medium")
+  recurring   Boolean  @default(false)
+  recurrenceRule String?
+  snoozedUntil DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Memory {
+  id        String   @id @default(cuid())
+  userId    String
+  category  String
+  key       String
+  value     String
+  source    String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String?
+  context   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  toolCalls      String?
+  toolResults    String?
+  tokens         Int?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String
+  tags      String?
+  pinned    Boolean  @default(false)
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Tracker {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  description String?
+  status      String    @default("active")
+  data        String?
+  dueDate     DateTime?
+  amount      Float?
+  currency    String?
+  tags        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String?
+  entityId   String?
+  details    String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Integration {
+  id           String    @id @default(cuid())
+  userId       String
+  provider     String
+  status       String    @default("disconnected")
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  scope        String?
+  metadata     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+model Automation {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  trigger     String
+  conditions  String?
+  actions     String
+  status      String    @default("active")
+  lastRun     DateTime?
+  nextRun     DateTime?
+  runCount    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserFile {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  originalName String
+  mimeType    String
+  size        Int
+  path        String
+  url         String?
+  summary     String?
+  tags        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
