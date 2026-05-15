@@ -509,6 +509,81 @@ async function executeToolCall(
         return JSON.stringify({ repos: (repos as any[]).slice(0, limit).map((r: any) => ({ name: r.name, fullName: r.full_name, description: r.description, stars: r.stargazers_count, language: r.language, updatedAt: r.updated_at })) })
       }
 
+      case 'web_search': {
+        const query = toolInput.query as string
+        const num = (toolInput.num_results as number) || 5
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+        try {
+          const res = await fetch(`${baseUrl}/api/tools/search?q=${encodeURIComponent(query)}&num=${num}`)
+          const data = await res.json()
+          if (data.results?.length > 0) {
+            const formatted = data.results.map((r: any, i: number) =>
+              `${i + 1}. **${r.title}**\n   ${r.snippet}\n   Source: ${r.url}`
+            ).join('\n\n')
+            return `Web search results for "${query}" (via ${data.source || 'search'}):\n\n${formatted}`
+          }
+          return data.error || `No results found for "${query}". ${process.env.BRAVE_SEARCH_API_KEY ? '' : 'Add BRAVE_SEARCH_API_KEY to .env for full web search.'}`
+        } catch {
+          return `Web search failed for "${query}"`
+        }
+      }
+
+      case 'wikipedia_lookup': {
+        const topic = toolInput.topic as string
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+        try {
+          const res = await fetch(`${baseUrl}/api/tools/wiki?topic=${encodeURIComponent(topic)}`)
+          const data = await res.json()
+          if (data.summary) {
+            return `**${data.title}** (Wikipedia)\n\n${data.summary}\n\nSource: ${data.url}`
+          }
+          return data.error || `No Wikipedia article found for "${topic}"`
+        } catch {
+          return `Wikipedia lookup failed for "${topic}"`
+        }
+      }
+
+      case 'get_current_weather': {
+        const city = toolInput.city as string
+        const countryCode = toolInput.country_code as string | undefined
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+        try {
+          const url = `${baseUrl}/api/tools/weather-tool?city=${encodeURIComponent(city)}${countryCode ? `&country_code=${countryCode}` : ''}`
+          const res = await fetch(url)
+          const data = await res.json()
+          if (data.temperature !== undefined) {
+            const forecastStr = data.forecast?.map((f: any) =>
+              `  ${f.date}: ${f.min}–${f.max}°C, ${f.condition}${f.precipitation > 0 ? `, ${f.precipitation}mm rain` : ''}`
+            ).join('\n') || ''
+            return `Weather in ${data.city}, ${data.country}:\n🌡️ Temperature: ${data.temperature}°C\n☁️ Condition: ${data.condition}\n💨 Wind: ${data.windspeed} km/h\n\n3-Day Forecast:\n${forecastStr}`
+          }
+          return data.error || `Could not get weather for "${city}"`
+        } catch {
+          return `Weather lookup failed for "${city}"`
+        }
+      }
+
+      case 'get_crypto_price': {
+        const coins = (toolInput.coins as string[]) || ['bitcoin', 'ethereum']
+        try {
+          const ids = coins.map(c => c.toLowerCase().replace(/\s+/g, '-')).join(',')
+          const res = await fetch(
+            `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`,
+            { next: { revalidate: 60 } }
+          )
+          const data = await res.json()
+          const lines = Object.entries(data).map(([coin, info]: [string, any]) => {
+            const change = info.usd_24h_change?.toFixed(2)
+            const changeStr = change ? ` (${parseFloat(change) >= 0 ? '+' : ''}${change}% 24h)` : ''
+            const mcap = info.usd_market_cap ? ` | Market Cap: $${(info.usd_market_cap / 1e9).toFixed(1)}B` : ''
+            return `• ${coin.charAt(0).toUpperCase() + coin.slice(1)}: $${info.usd?.toLocaleString()}${changeStr}${mcap}`
+          })
+          return `Live Crypto Prices:\n${lines.join('\n')}\n\n_Prices via CoinGecko_`
+        } catch {
+          return 'Could not fetch crypto prices at this time.'
+        }
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` })
     }
@@ -549,8 +624,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (!conversation) {
+      const firstMsgContent = messages[0]?.text || messages[0]?.content || 'New conversation'
       conversation = await prisma.conversation.create({
-        data: { userId: user.id, title: messages[0]?.content?.substring(0, 60) || 'New conversation' },
+        data: { userId: user.id, title: (firstMsgContent as string).substring(0, 60) },
         include: { messages: true },
       })
     }
@@ -579,12 +655,33 @@ export async function POST(req: NextRequest) {
       ? (prefs?.openaiModel || 'gpt-4o')
       : (prefs?.aiModel || 'claude-sonnet-4-6')
 
-    // Format messages for the agentic loop
-    const claudeMessages: Array<{ role: 'user' | 'assistant'; content: string }> =
-      messages.map((m: { role: string; content: string }) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      }))
+    // Format messages for the agentic loop (supports multimodal image messages)
+    const claudeMessages: Anthropic.MessageParam[] =
+      messages.map((m: { role: string; content: string; image?: string; text?: string }) => {
+        if (m.role === 'user' && m.image && m.image.startsWith('data:image/')) {
+          const [header, base64Data] = m.image.split(',')
+          const mediaType = header.match(/data:(image\/[^;]+)/)?.[1] || 'image/jpeg'
+          const anthropicMsg: Anthropic.MessageParam = {
+            role: 'user' as const,
+            content: [
+              {
+                type: 'image' as const,
+                source: {
+                  type: 'base64' as const,
+                  media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                  data: base64Data,
+                },
+              },
+              { type: 'text' as const, text: m.text || m.content || '' },
+            ],
+          }
+          return anthropicMsg
+        }
+        return {
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }
+      })
 
     // Agentic loop with tool calling — unified across providers
     let response = await createMessage({
@@ -632,7 +729,7 @@ export async function POST(req: NextRequest) {
       data: {
         conversationId: conversation.id,
         role: 'user',
-        content: lastUserMessage.content,
+        content: lastUserMessage.text || lastUserMessage.content || '',
       },
     })
     await prisma.message.create({

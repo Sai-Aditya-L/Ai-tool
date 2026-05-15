@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Mic, Paperclip, Zap, RotateCcw, Copy, Check, StopCircle, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, History } from 'lucide-react'
+import { Send, Mic, Paperclip, Zap, RotateCcw, Copy, Check, StopCircle, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, History, ImageIcon, X as XIcon } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -13,6 +13,8 @@ interface Message {
   timestamp: Date
   loading?: boolean
   tokens?: number
+  image?: string
+  toolStatus?: string
 }
 
 interface ConversationSummary {
@@ -50,9 +52,11 @@ export function ChatInterface() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [loadingConversation, setLoadingConversation] = useState<string | null>(null)
+  const [pendingImage, setPendingImage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch conversation list on mount and whenever sidebar opens
   useEffect(() => {
@@ -120,15 +124,36 @@ export function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be under 5MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (ev) => setPendingImage(ev.target?.result as string)
+    reader.readAsDataURL(file)
+    // reset input
+    e.target.value = ''
+  }
+
   const sendMessage = useCallback(async (text?: string) => {
     const content = text || input.trim()
     if (!content || loading) return
+
+    const capturedImage = pendingImage
 
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
       content,
       timestamp: new Date(),
+      image: capturedImage || undefined,
     }
 
     const loadingMsg: Message = {
@@ -141,12 +166,18 @@ export function ChatInterface() {
 
     setMessages(prev => [...prev, userMsg, loadingMsg])
     setInput('')
+    setPendingImage(null)
     setLoading(true)
 
     const allMessages = [
       ...messages.filter(m => !m.loading),
       userMsg,
-    ].map(m => ({ role: m.role, content: m.content }))
+    ].map(m => {
+      if (m.image) {
+        return { role: m.role, content: m.content, text: m.content, image: m.image }
+      }
+      return { role: m.role, content: m.content }
+    })
 
     abortRef.current = new AbortController()
 
@@ -360,6 +391,19 @@ export function ChatInterface() {
                   </div>
                 ) : (
                   <>
+                    {msg.toolStatus && (
+                      <div className="flex items-center gap-2 text-xs text-cyan-400/60 mb-1 nexus-mono">
+                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                        {msg.toolStatus}
+                      </div>
+                    )}
+                    {msg.image && (
+                      <img
+                        src={msg.image}
+                        alt="Uploaded"
+                        className="max-w-[280px] rounded-lg mb-2 border border-cyan-400/20"
+                      />
+                    )}
                     <div
                       className="text-white/85 text-sm leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: formatContent(msg.content) }}
@@ -424,7 +468,22 @@ export function ChatInterface() {
 
         {/* Input */}
         <div className="p-4 border-t border-cyan-400/10">
-          <div className="flex items-end gap-3 glass-panel rounded-2xl px-4 py-3">
+          <div className="flex flex-col glass-panel rounded-2xl">
+            {pendingImage && (
+              <div className="px-4 pt-3 flex items-start gap-2">
+                <div className="relative">
+                  <img src={pendingImage} alt="Pending" className="h-16 w-16 object-cover rounded-lg border border-cyan-400/30" />
+                  <button
+                    onClick={() => setPendingImage(null)}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center"
+                  >
+                    <XIcon size={8} className="text-white" />
+                  </button>
+                </div>
+                <span className="text-xs text-white/40 mt-1">Image attached — describe what you need</span>
+              </div>
+            )}
+          <div className="flex items-end gap-3 px-4 py-3">
             <textarea
               ref={inputRef}
               value={input}
@@ -447,6 +506,25 @@ export function ChatInterface() {
               <button className="text-white/30 hover:text-cyan-400 transition-colors p-1" title="Attach file">
                 <Paperclip size={16} />
               </button>
+              {/* Image upload button */}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className={cn(
+                  'p-2 rounded-lg transition-all text-white/30 hover:text-cyan-400 hover:bg-cyan-400/5 border border-transparent hover:border-cyan-400/15',
+                  pendingImage && 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+                )}
+                title="Attach image"
+              >
+                <ImageIcon size={16} />
+              </button>
               <button
                 onClick={() => clearConversation()}
                 className="text-white/30 hover:text-white/60 transition-colors p-1"
@@ -464,13 +542,14 @@ export function ChatInterface() {
               ) : (
                 <button
                   onClick={() => sendMessage()}
-                  disabled={!input.trim()}
+                  disabled={!input.trim() && !pendingImage}
                   className="w-8 h-8 rounded-lg bg-cyan-400/10 border border-cyan-400/30 flex items-center justify-center text-cyan-400 hover:bg-cyan-400/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
                   <Send size={16} />
                 </button>
               )}
             </div>
+          </div>
           </div>
           <p className="text-center text-white/20 text-[10px] mt-2 nexus-mono">
             NEXUS — Neural EXtended Universal System v1.0

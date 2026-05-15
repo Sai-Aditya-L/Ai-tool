@@ -30,6 +30,11 @@ Your capabilities:
 - Email management via Gmail (reading, summarizing, drafting)
 - Calendar event creation and scheduling via Google Calendar
 - Meeting detection and conflict checking
+- Real-time web search for current information and news
+- Wikipedia lookups for encyclopedic knowledge
+- Current weather for any city worldwide
+- Live cryptocurrency prices
+- Image and photo analysis (when user uploads an image)
 
 When the user asks you to DO something (create a task, set a reminder, etc.), use the appropriate tool function. When they ask questions, answer thoughtfully. Always confirm before performing destructive actions.
 
@@ -408,6 +413,56 @@ export const NEXUS_TOOLS: Anthropic.Tool[] = [
         limit: { type: 'string', description: 'Maximum number of repos to return' },
       },
       required: [],
+    },
+  },
+  {
+    name: 'web_search',
+    description: 'Search the web for current, real-time information. Use this when the user asks about recent events, current data, news, or anything that requires up-to-date information beyond your training data.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'The search query' },
+        num_results: { type: 'number', description: 'Number of results to return (default 5, max 10)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'wikipedia_lookup',
+    description: 'Look up factual information about a topic from Wikipedia. Use for encyclopedic knowledge, historical facts, scientific concepts, or biographical information.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        topic: { type: 'string', description: 'The topic or article title to look up' },
+      },
+      required: ['topic'],
+    },
+  },
+  {
+    name: 'get_current_weather',
+    description: 'Get current weather conditions and forecast for any city or location.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        city: { type: 'string', description: 'City name (e.g. "London", "New York", "Tokyo")' },
+        country_code: { type: 'string', description: 'Optional 2-letter ISO country code to disambiguate (e.g. "GB", "US")' },
+      },
+      required: ['city'],
+    },
+  },
+  {
+    name: 'get_crypto_price',
+    description: 'Get current cryptocurrency prices and 24h change. Use when user asks about Bitcoin, Ethereum, or any crypto.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        coins: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of coin IDs (e.g. ["bitcoin", "ethereum", "solana"])',
+        },
+      },
+      required: ['coins'],
     },
   },
 ]
