@@ -118,7 +118,7 @@ function extractLinks(html: string, baseUrl: string): string[] {
       // skip invalid URLs
     }
   }
-  return [...new Set(links)].slice(0, 20)
+  return Array.from(new Set(links)).slice(0, 20)
 }
 
 // ─── Extract Metadata ────────────────────────────────────────────────────────
@@ -408,7 +408,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
   const userPending: Array<{ actionId: string; action: string; description: string; createdAt: Date }> = []
-  for (const [actionId, pending] of pendingActions.entries()) {
+  for (const [actionId, pending] of Array.from(pendingActions.entries())) {
     if (pending.userId === user.id) {
       userPending.push({
         actionId,

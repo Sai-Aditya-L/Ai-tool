@@ -10,7 +10,7 @@ import {
   Puzzle, Settings, LogOut, Mic, ChevronLeft, ChevronRight,
   StickyNote, Mail, Bot, Code2, Wifi, Sparkles, Newspaper, TrendingUp,
   Wrench, BrainCircuit, Monitor, Music2, Home, FlameKindling,
-  Shield, Target, Network, Microscope, Plane, Lock, BookOpen
+  Shield, Target, Network, Microscope, Plane, Lock, BookOpen, MousePointer2
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -53,6 +53,7 @@ const navItems = [
       { href: '/market', icon: TrendingUp, label: 'Market', color: 'text-amber-400' },
       { href: '/tools', icon: Wrench, label: 'Tools', color: 'text-cyan-400' },
       { href: '/alerts', icon: BrainCircuit, label: 'Proactive Alerts', color: 'text-violet-400' },
+      { href: '/computer-control', icon: MousePointer2, label: 'Computer Control', color: 'text-green-400' },
     ],
   },
   {

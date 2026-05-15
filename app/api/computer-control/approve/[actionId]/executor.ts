@@ -85,7 +85,7 @@ export async function executeApprovedAction(
         return {
           title: extractTitle(html),
           text: stripHtml(html).slice(0, 8000),
-          links: [...new Set(links)].filter(l => l.startsWith('http')).slice(0, 20),
+          links: Array.from(new Set(links)).filter(l => l.startsWith('http')).slice(0, 20),
           url,
           status: res.status,
         }
