@@ -18,6 +18,14 @@ export const metadata: Metadata = {
   icons: {
     icon: '/favicon.ico',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'NEXUS',
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
   openGraph: {
     type: 'website',
     title: 'NEXUS — Neural EXtended Universal System',
@@ -27,7 +35,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#050510',
+  themeColor: '#00d4ff',
   width: 'device-width',
   initialScale: 1,
 }
