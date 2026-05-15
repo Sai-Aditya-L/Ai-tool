@@ -5,25 +5,39 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>()
 
+function cleanup() {
+  const now = Date.now()
+  Array.from(store.entries()).forEach(([key, entry]) => {
+    if (entry.resetAt < now) store.delete(key)
+  })
+}
+
+// Run cleanup every 5 minutes to prevent unbounded memory growth
+setInterval(cleanup, 5 * 60 * 1000)
+
 export function rateLimit(
   key: string,
   limit: number,
   windowMs: number
-): { allowed: boolean; remaining: number; resetAt: number } {
+): { success: boolean; allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now()
   const entry = store.get(key)
 
   if (!entry || entry.resetAt < now) {
     store.set(key, { count: 1, resetAt: now + windowMs })
-    return { allowed: true, remaining: limit - 1, resetAt: now + windowMs }
+    // Clean up expired entries after each call
+    cleanup()
+    return { success: true, allowed: true, remaining: limit - 1, resetAt: now + windowMs }
   }
 
   if (entry.count >= limit) {
-    return { allowed: false, remaining: 0, resetAt: entry.resetAt }
+    return { success: false, allowed: false, remaining: 0, resetAt: entry.resetAt }
   }
 
   entry.count++
-  return { allowed: true, remaining: limit - entry.count, resetAt: entry.resetAt }
+  // Clean up expired entries after each call
+  cleanup()
+  return { success: true, allowed: true, remaining: limit - entry.count, resetAt: entry.resetAt }
 }
 
 export function rateLimitResponse() {

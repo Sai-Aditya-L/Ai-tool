@@ -12,6 +12,7 @@ interface Message {
   toolsUsed?: string[]
   timestamp: Date
   loading?: boolean
+  tokens?: number
 }
 
 interface ConversationSummary {
@@ -170,7 +171,7 @@ export function ChatInterface() {
 
       setMessages(prev => prev.map(m =>
         m.loading
-          ? { ...m, content: data.message, loading: false, toolsUsed: data.toolsUsed }
+          ? { ...m, content: data.message, loading: false, toolsUsed: data.toolsUsed, tokens: data.tokens }
           : m
       ))
     } catch (error: any) {
@@ -315,6 +316,15 @@ export function ChatInterface() {
 
       {/* Main chat */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Session token total */}
+        {(() => {
+          const totalTokens = messages.reduce((sum, m) => sum + (m.tokens ?? 0), 0)
+          return totalTokens > 0 ? (
+            <div className="flex justify-end px-4 pt-2">
+              <span className="text-white/20 text-[10px] nexus-mono">Session: ~{totalTokens.toLocaleString()} tokens</span>
+            </div>
+          ) : null
+        })()}
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {messages.map((msg) => (
@@ -363,6 +373,9 @@ export function ChatInterface() {
                           </span>
                         ))}
                       </div>
+                    )}
+                    {msg.role === 'assistant' && msg.tokens != null && msg.tokens > 0 && (
+                      <span className="text-white/20 text-[10px] nexus-mono mt-1 block">{msg.tokens} tokens</span>
                     )}
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-white/20 text-[10px]">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight, Square, CheckSquare as CheckSquareIcon } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -205,9 +205,12 @@ interface TaskRowProps {
   onDelete: (id: string) => void
   onEdit: (task: Task) => void
   onTaskUpdate: (updated: Task) => void
+  selectMode?: boolean
+  selected?: boolean
+  onSelect?: (id: string) => void
 }
 
-function TaskRow({ task, onStatusChange, onDelete, onEdit, onTaskUpdate }: TaskRowProps) {
+function TaskRow({ task, onStatusChange, onDelete, onEdit, onTaskUpdate, selectMode, selected, onSelect }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [subtasks, setSubtasks] = useState<Task[]>(task.subtasks ?? [])
   const [newSubtask, setNewSubtask] = useState('')
@@ -295,21 +298,38 @@ function TaskRow({ task, onStatusChange, onDelete, onEdit, onTaskUpdate }: TaskR
     )}>
       {/* Main task row */}
       <div className="flex items-start gap-3 p-4">
+        {/* Select checkbox (selectMode) */}
+        {selectMode && (
+          <button
+            onClick={() => onSelect?.(task.id)}
+            className={cn(
+              'mt-0.5 w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all',
+              selected
+                ? 'bg-cyan-400/20 border-cyan-400'
+                : 'border-white/30 hover:border-cyan-400/60'
+            )}
+          >
+            {selected && <Check size={12} className="text-cyan-400" />}
+          </button>
+        )}
+
         {/* Expand toggle */}
-        <button
-          onClick={toggleExpand}
-          className={cn(
-            'mt-0.5 flex-shrink-0 transition-colors',
-            hasSubtasks || expanded
-              ? 'text-white/40 hover:text-cyan-400'
-              : 'text-white/10 hover:text-white/30'
-          )}
-        >
-          {expanded
-            ? <ChevronDown size={14} />
-            : <ChevronRight size={14} />
-          }
-        </button>
+        {!selectMode && (
+          <button
+            onClick={toggleExpand}
+            className={cn(
+              'mt-0.5 flex-shrink-0 transition-colors',
+              hasSubtasks || expanded
+                ? 'text-white/40 hover:text-cyan-400'
+                : 'text-white/10 hover:text-white/30'
+            )}
+          >
+            {expanded
+              ? <ChevronDown size={14} />
+              : <ChevronRight size={14} />
+            }
+          </button>
+        )}
 
         {/* Checkbox */}
         <button
@@ -433,6 +453,8 @@ export default function TasksPage() {
   const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('all')
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [form, setForm] = useState({ title: '', description: '', priority: 'medium', dueDate: '', tags: '' })
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchTasks() }, [filter])
 
@@ -505,6 +527,52 @@ export default function TasksPage() {
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function bulkComplete() {
+    const ids = Array.from(selectedIds)
+    try {
+      const res = await fetch('/api/tasks/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete', ids }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`${ids.length} task${ids.length !== 1 ? 's' : ''} completed`)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+      fetchTasks()
+    } catch {
+      toast.error('Failed to complete tasks')
+    }
+  }
+
+  async function bulkDelete() {
+    const ids = Array.from(selectedIds)
+    if (!confirm(`Delete ${ids.length} task${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    try {
+      const res = await fetch('/api/tasks/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', ids }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`${ids.length} task${ids.length !== 1 ? 's' : ''} deleted`)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+      fetchTasks()
+    } catch {
+      toast.error('Failed to delete tasks')
+    }
+  }
+
   function applyDueDateFilter(taskList: Task[]): Task[] {
     if (dueDateFilter === 'all') return taskList
     const now = new Date()
@@ -538,6 +606,18 @@ export default function TasksPage() {
             >
               <Plus size={16} />
               New Task
+            </button>
+            <button
+              onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()) }}
+              className={cn(
+                'flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-all',
+                selectMode
+                  ? 'bg-cyan-400/15 border-cyan-400/30 text-cyan-400'
+                  : 'text-white/40 border-white/10 hover:border-white/20 hover:text-white/60'
+              )}
+            >
+              <CheckSquareIcon size={14} />
+              Select
             </button>
 
             {/* Status filter */}
@@ -659,6 +739,9 @@ export default function TasksPage() {
                   onDelete={deleteTask}
                   onEdit={setEditingTask}
                   onTaskUpdate={handleTaskUpdate}
+                  selectMode={selectMode}
+                  selected={selectedIds.has(task.id)}
+                  onSelect={toggleSelect}
                 />
               ))}
             </div>
@@ -673,6 +756,32 @@ export default function TasksPage() {
           onClose={() => setEditingTask(null)}
           onSave={handleEditSave}
         />
+      )}
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass-panel rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl border border-cyan-400/20">
+          <span className="text-white/60 text-sm nexus-mono">{selectedIds.size} selected</span>
+          <button
+            onClick={bulkComplete}
+            className="nexus-btn-primary text-xs flex items-center gap-1.5 py-1.5 px-3"
+          >
+            <Check size={13} /> Complete All
+          </button>
+          <button
+            onClick={bulkDelete}
+            className="text-xs flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-red-400/30 text-red-400 hover:bg-red-400/10 transition-all"
+          >
+            <Trash2 size={13} /> Delete All
+          </button>
+          <button
+            onClick={() => { setSelectedIds(new Set()); setSelectMode(false) }}
+            className="text-white/40 hover:text-white/70 transition-colors p-1"
+            title="Cancel"
+          >
+            <X size={16} />
+          </button>
+        </div>
       )}
     </div>
   )

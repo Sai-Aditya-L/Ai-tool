@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+
+const patchSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  role: z.string().min(1).max(100).optional(),
+  description: z.string().max(2000).optional(),
+  systemPrompt: z.string().max(10000).optional(),
+  model: z.string().max(100).optional(),
+  tools: z.string().optional(),
+  avatar: z.string().max(100).optional(),
+  status: z.enum(['idle', 'running', 'error']).optional(),
+})
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -40,25 +52,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   try {
     const body = await req.json()
-    const { name, role, description, systemPrompt, model, tools, avatar, status } = body
-
-    const updateData: Record<string, unknown> = {}
-    if (name !== undefined) updateData.name = name
-    if (role !== undefined) updateData.role = role
-    if (description !== undefined) updateData.description = description
-    if (systemPrompt !== undefined) updateData.systemPrompt = systemPrompt
-    if (model !== undefined) updateData.model = model
-    if (tools !== undefined) updateData.tools = tools
-    if (avatar !== undefined) updateData.avatar = avatar
-    if (status !== undefined) updateData.status = status
+    const data = patchSchema.parse(body)
 
     const agent = await prisma.agent.update({
       where: { id: params.id },
-      data: updateData,
+      data,
     })
 
     return NextResponse.json({ agent })
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Invalid data', details: error.errors }, { status: 400 })
+    }
     console.error('PATCH /api/agents/[id] error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

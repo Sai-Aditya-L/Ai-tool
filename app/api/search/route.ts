@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -14,14 +15,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
+  const identifier = user?.id || req.headers.get('x-forwarded-for') || 'anonymous'
+  const rl = rateLimit(`search:${identifier}`, 30, 60_000)
+  if (!rl.success) return rateLimitResponse()
+
   const { searchParams } = new URL(req.url)
   const q = searchParams.get('q')?.trim() ?? ''
 
   if (!q) {
-    return NextResponse.json({ tasks: [], reminders: [], notes: [], memories: [], files: [] })
+    return NextResponse.json({ tasks: [], reminders: [], notes: [], memories: [], files: [], conversations: [] })
   }
 
-  const [tasks, reminders, notes, memories, files] = await Promise.all([
+  const [tasks, reminders, notes, memories, files, conversations] = await Promise.all([
     prisma.task.findMany({
       where: {
         userId: user.id,
@@ -80,7 +85,17 @@ export async function GET(req: NextRequest) {
       take: 5,
       select: { id: true, name: true, originalName: true, mimeType: true, size: true, tags: true },
     }),
+
+    prisma.conversation.findMany({
+      where: {
+        userId: user.id,
+        title: { contains: q },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 3,
+      select: { id: true, title: true, updatedAt: true },
+    }),
   ])
 
-  return NextResponse.json({ tasks, reminders, notes, memories, files })
+  return NextResponse.json({ tasks, reminders, notes, memories, files, conversations })
 }

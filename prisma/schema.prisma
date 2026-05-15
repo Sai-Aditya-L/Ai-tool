@@ -114,6 +114,11 @@ model Task {
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent   Task?  @relation("SubTasks", fields: [parentId], references: [id])
   subtasks Task[] @relation("SubTasks")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, priority])
+  @@index([dueDate])
 }
 
 model Reminder {
@@ -132,6 +137,10 @@ model Reminder {
   updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([dueAt])
 }
 
 model Memory {
@@ -147,6 +156,7 @@ model Memory {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key])
+  @@index([userId, category])
 }
 
 model Conversation {
@@ -159,6 +169,8 @@ model Conversation {
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
+
+  @@index([userId])
 }
 
 model Message {
@@ -172,6 +184,8 @@ model Message {
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
 }
 
 model Note {
@@ -186,6 +200,9 @@ model Note {
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, pinned])
 }
 
 model Tracker {
@@ -204,6 +221,10 @@ model Tracker {
   updatedAt   DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, type])
+  @@index([userId, status])
 }
 
 model ActivityLog {
@@ -293,6 +314,7 @@ model CalendarEvent {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, googleEventId])
   @@index([userId, startTime])
 }
 

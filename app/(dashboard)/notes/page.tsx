@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, StickyNote, Pin, PinOff, Trash2, X, Search, Edit3, Save, Eye } from 'lucide-react'
+import { Plus, StickyNote, Pin, PinOff, Trash2, X, Search, Edit3, Save, Eye, CheckSquare, Check } from 'lucide-react'
 import { cn, formatRelativeTime, parseTags } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -137,6 +137,8 @@ export default function NotesPage() {
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ title: '', content: '', tags: '', color: '' })
   const [previewMode, setPreviewMode] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchNotes() }, [search])
 
@@ -207,10 +209,60 @@ export default function NotesPage() {
   }
 
   function startEditing(note: Note) {
+    if (selectMode) {
+      toggleSelect(note.id)
+      return
+    }
     setEditingNote(note)
     setForm({ title: note.title, content: note.content, tags: note.tags || '', color: note.color || '' })
     setPreviewMode(false)
     setShowForm(true)
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function bulkPin(action: 'pin' | 'unpin') {
+    const ids = Array.from(selectedIds)
+    try {
+      const res = await fetch('/api/notes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`${ids.length} note${ids.length !== 1 ? 's' : ''} ${action === 'pin' ? 'pinned' : 'unpinned'}`)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+      fetchNotes()
+    } catch {
+      toast.error(`Failed to ${action} notes`)
+    }
+  }
+
+  async function bulkDelete() {
+    const ids = Array.from(selectedIds)
+    if (!confirm(`Delete ${ids.length} note${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    try {
+      const res = await fetch('/api/notes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', ids }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`${ids.length} note${ids.length !== 1 ? 's' : ''} deleted`)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+      fetchNotes()
+    } catch {
+      toast.error('Failed to delete notes')
+    }
   }
 
   return (
@@ -227,6 +279,18 @@ export default function NotesPage() {
             >
               <Plus size={16} />
               New Note
+            </button>
+            <button
+              onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()) }}
+              className={cn(
+                'flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-all',
+                selectMode
+                  ? 'bg-cyan-400/15 border-cyan-400/30 text-cyan-400'
+                  : 'text-white/40 border-white/10 hover:border-white/20 hover:text-white/60'
+              )}
+            >
+              <CheckSquare size={14} />
+              Select
             </button>
             <div className="relative flex-1 max-w-xs">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
@@ -354,34 +418,51 @@ export default function NotesPage() {
                 <div
                   key={note.id}
                   className={cn(
-                    'glass-panel-hover rounded-xl p-4 border flex flex-col gap-2 group cursor-pointer',
-                    COLOR_CLASSES[note.color || ''] || COLOR_CLASSES['']
+                    'glass-panel-hover rounded-xl p-4 border flex flex-col gap-2 group cursor-pointer relative',
+                    COLOR_CLASSES[note.color || ''] || COLOR_CLASSES[''],
+                    selectMode && selectedIds.has(note.id) && 'ring-2 ring-cyan-400/50'
                   )}
                   onClick={() => startEditing(note)}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-white/85 font-medium text-sm line-clamp-1">{note.title}</h3>
-                    <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={e => { e.stopPropagation(); togglePin(note.id, note.pinned) }}
-                        className={cn('p-1 rounded transition-colors', note.pinned ? 'text-cyan-400' : 'text-white/30 hover:text-white/60')}
-                        title={note.pinned ? 'Unpin' : 'Pin'}
-                      >
-                        {note.pinned ? <Pin size={12} /> : <PinOff size={12} />}
-                      </button>
-                      <button
-                        onClick={e => { e.stopPropagation(); startEditing(note) }}
-                        className="p-1 rounded text-white/30 hover:text-cyan-400 transition-colors"
-                      >
-                        <Edit3 size={12} />
-                      </button>
-                      <button
-                        onClick={e => { e.stopPropagation(); deleteNote(note.id) }}
-                        className="p-1 rounded text-white/30 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                  {/* Select checkbox overlay */}
+                  {selectMode && (
+                    <div className="absolute top-2 left-2 z-10">
+                      <div className={cn(
+                        'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
+                        selectedIds.has(note.id)
+                          ? 'bg-cyan-400/20 border-cyan-400'
+                          : 'border-white/30 bg-black/30'
+                      )}>
+                        {selectedIds.has(note.id) && <Check size={12} className="text-cyan-400" />}
+                      </div>
                     </div>
+                  )}
+
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className={cn('text-white/85 font-medium text-sm line-clamp-1', selectMode && 'pl-6')}>{note.title}</h3>
+                    {!selectMode && (
+                      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={e => { e.stopPropagation(); togglePin(note.id, note.pinned) }}
+                          className={cn('p-1 rounded transition-colors', note.pinned ? 'text-cyan-400' : 'text-white/30 hover:text-white/60')}
+                          title={note.pinned ? 'Unpin' : 'Pin'}
+                        >
+                          {note.pinned ? <Pin size={12} /> : <PinOff size={12} />}
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); startEditing(note) }}
+                          className="p-1 rounded text-white/30 hover:text-cyan-400 transition-colors"
+                        >
+                          <Edit3 size={12} />
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteNote(note.id) }}
+                          className="p-1 rounded text-white/30 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <p className="text-white/45 text-xs leading-relaxed line-clamp-4">{note.content}</p>
@@ -402,6 +483,38 @@ export default function NotesPage() {
           )}
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass-panel rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl border border-cyan-400/20">
+          <span className="text-white/60 text-sm nexus-mono">{selectedIds.size} selected</span>
+          <button
+            onClick={() => bulkPin('pin')}
+            className="text-xs flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 transition-all"
+          >
+            <Pin size={13} /> Pin All
+          </button>
+          <button
+            onClick={() => bulkPin('unpin')}
+            className="text-xs flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-white/15 text-white/50 hover:bg-white/5 transition-all"
+          >
+            <PinOff size={13} /> Unpin All
+          </button>
+          <button
+            onClick={bulkDelete}
+            className="text-xs flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-red-400/30 text-red-400 hover:bg-red-400/10 transition-all"
+          >
+            <Trash2 size={13} /> Delete All
+          </button>
+          <button
+            onClick={() => { setSelectedIds(new Set()); setSelectMode(false) }}
+            className="text-white/40 hover:text-white/70 transition-colors p-1"
+            title="Cancel"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

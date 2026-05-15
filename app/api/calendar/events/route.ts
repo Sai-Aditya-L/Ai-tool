@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const days = parseInt(searchParams.get('days') || '30')
   const maxResults = parseInt(searchParams.get('maxResults') || '20')
+  const refresh = searchParams.get('refresh') === 'true'
 
   if (!connected) {
     // Return NEXUS reminders as calendar items when Google not connected
@@ -53,11 +54,85 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ connected: false, events, source: 'nexus' })
   }
 
+  // --- Cache-first path ---
+  if (!refresh) {
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+
+    const cached = await prisma.calendarEvent.findMany({
+      where: {
+        userId: user.id,
+        startTime: { gte: startOfToday },
+      },
+      orderBy: { startTime: 'asc' },
+      take: 100,
+    })
+
+    if (cached.length > 0) {
+      const events = cached.map(e => ({
+        id: e.googleEventId || e.id,
+        title: e.title,
+        description: e.description || '',
+        location: e.location || '',
+        startTime: e.startTime.toISOString(),
+        endTime: e.endTime.toISOString(),
+        allDay: e.allDay,
+        attendees: e.attendees || '',
+        meetLink: e.meetLink || '',
+        status: e.status,
+        source: e.source,
+      }))
+
+      return NextResponse.json({ connected: true, events, source: 'google', cacheHit: true })
+    }
+  }
+
+  // --- Live fetch path ---
   try {
     const timeMin = new Date()
     const timeMax = new Date(timeMin.getTime() + days * 24 * 60 * 60 * 1000)
     const events = await listCalendarEvents(user.id, { maxResults, timeMin, timeMax })
-    return NextResponse.json({ connected: true, events, source: 'google' })
+
+    // Upsert fetched events into cache
+    if (events && events.length > 0) {
+      await Promise.allSettled(
+        events.map(e =>
+          e.id
+            ? prisma.calendarEvent.upsert({
+                where: { userId_googleEventId: { userId: user.id, googleEventId: e.id } },
+                update: {
+                  title: e.title,
+                  description: e.description || null,
+                  location: e.location || null,
+                  startTime: new Date(e.startTime),
+                  endTime: new Date(e.endTime),
+                  allDay: e.allDay,
+                  attendees: e.attendees || null,
+                  meetLink: e.meetLink || null,
+                  status: e.status || 'confirmed',
+                  source: 'google',
+                },
+                create: {
+                  userId: user.id,
+                  googleEventId: e.id,
+                  title: e.title,
+                  description: e.description || null,
+                  location: e.location || null,
+                  startTime: new Date(e.startTime),
+                  endTime: new Date(e.endTime),
+                  allDay: e.allDay,
+                  attendees: e.attendees || null,
+                  meetLink: e.meetLink || null,
+                  status: e.status || 'confirmed',
+                  source: 'google',
+                },
+              })
+            : Promise.resolve()
+        )
+      )
+    }
+
+    return NextResponse.json({ connected: true, events, source: 'google', cacheHit: false })
   } catch (error: any) {
     if (error.message?.includes('invalid_grant')) {
       return NextResponse.json({ error: 'Google token expired. Please reconnect.', reconnect: true }, { status: 401 })

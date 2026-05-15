@@ -25,7 +25,48 @@ export async function GET(req: NextRequest) {
   const maxResults = parseInt(searchParams.get('maxResults') || '20')
   const query = searchParams.get('q') || ''
   const unreadOnly = searchParams.get('unreadOnly') === 'true'
+  const refresh = searchParams.get('refresh') === 'true'
+  const analyze = searchParams.get('analyze') === 'true'
 
+  // --- Cache-first path ---
+  // Only use cache when there's no search query and not an unread-only filter
+  // (those filters require live data). Always bypass cache if ?refresh=true or ?analyze=true.
+  const canUseCache = !refresh && !analyze && !query && !unreadOnly
+
+  if (canUseCache) {
+    const cached = await prisma.emailCache.findMany({
+      where: { userId: user.id },
+      orderBy: { receivedAt: 'desc' },
+      take: 50,
+    })
+
+    if (cached.length > 0) {
+      const emails = cached.map(e => ({
+        id: e.gmailId,
+        threadId: e.threadId,
+        from: e.from,
+        fromName: e.fromName,
+        to: e.to,
+        subject: e.subject,
+        snippet: e.snippet,
+        body: e.body,
+        summary: e.summary,
+        labels: e.labels ? JSON.parse(e.labels) : [],
+        isRead: e.isRead,
+        isStarred: e.isStarred,
+        isImportant: e.isImportant,
+        receivedAt: e.receivedAt.toISOString(),
+      }))
+
+      return NextResponse.json({
+        connected: true,
+        emails,
+        cacheHit: true,
+      })
+    }
+  }
+
+  // --- Live fetch path ---
   try {
     const result = await listEmails(user.id, {
       maxResults,
@@ -35,11 +76,55 @@ export async function GET(req: NextRequest) {
 
     const emails = result.emails
 
+    // Upsert fetched emails into cache (skip when query/unreadOnly filters are active
+    // to avoid polluting the cache with partial result sets)
+    if (emails && emails.length > 0 && !query && !unreadOnly) {
+      await Promise.allSettled(
+        (emails as any[]).map(e =>
+          prisma.emailCache.upsert({
+            where: { userId_gmailId: { userId: user.id, gmailId: e.id } },
+            update: {
+              threadId: e.threadId,
+              from: e.from,
+              fromName: e.fromName ?? null,
+              to: e.to,
+              subject: e.subject,
+              snippet: e.snippet ?? null,
+              body: e.body ?? null,
+              summary: e.summary ?? null,
+              labels: e.labels ? JSON.stringify(e.labels) : null,
+              isRead: e.isRead,
+              isStarred: e.isStarred,
+              isImportant: e.isImportant,
+              receivedAt: new Date(e.receivedAt),
+            },
+            create: {
+              userId: user.id,
+              gmailId: e.id,
+              threadId: e.threadId,
+              from: e.from,
+              fromName: e.fromName ?? null,
+              to: e.to,
+              subject: e.subject,
+              snippet: e.snippet ?? null,
+              body: e.body ?? null,
+              summary: e.summary ?? null,
+              labels: e.labels ? JSON.stringify(e.labels) : null,
+              isRead: e.isRead,
+              isStarred: e.isStarred,
+              isImportant: e.isImportant,
+              receivedAt: new Date(e.receivedAt),
+            },
+          })
+        )
+      )
+    }
+
     // Optional AI analysis step when ?analyze=true is set
-    if (searchParams.get('analyze') === 'true' && emails && emails.length > 0) {
+    if (analyze && emails && emails.length > 0) {
       try {
-        const unreadEmails = emails.filter((e: any) => !e.isRead).slice(0, 5)
-        const emailsToAnalyze = unreadEmails.length > 0 ? unreadEmails : emails.slice(0, 5)
+        const unreadEmails = (emails as any[]).filter((e: any) => !e.isRead).slice(0, 5)
+        const emailsToAnalyze = unreadEmails.length > 0 ? unreadEmails : (emails as any[]).slice(0, 5)
 
         const emailList = emailsToAnalyze
           .map((e: any, i: number) => `${i + 1}. Subject: ${e.subject}\n   From: ${e.from}\n   Snippet: ${e.snippet}`)
@@ -60,6 +145,7 @@ export async function GET(req: NextRequest) {
             emails,
             nextPageToken: result.nextPageToken,
             actionItems,
+            cacheHit: false,
           })
         }
       } catch {
@@ -71,6 +157,7 @@ export async function GET(req: NextRequest) {
       connected: true,
       emails,
       nextPageToken: result.nextPageToken,
+      cacheHit: false,
     })
   } catch (error: any) {
     if (error.message?.includes('invalid_grant') || error.message?.includes('Token')) {

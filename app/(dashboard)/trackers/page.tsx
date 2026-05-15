@@ -1,11 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { Header } from '@/components/layout/header'
 import { BarChart2, Plus, Trash2, X, DollarSign, Calendar, Tag, List, PieChart as PieChartIcon } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
+
+const BarChart = dynamic(() => import('recharts').then(m => ({ default: m.BarChart })), { ssr: false })
+const Bar = dynamic(() => import('recharts').then(m => ({ default: m.Bar })), { ssr: false })
+const XAxis = dynamic(() => import('recharts').then(m => ({ default: m.XAxis })), { ssr: false })
+const YAxis = dynamic(() => import('recharts').then(m => ({ default: m.YAxis })), { ssr: false })
+const Tooltip = dynamic(() => import('recharts').then(m => ({ default: m.Tooltip })), { ssr: false })
+const ResponsiveContainer = dynamic(() => import('recharts').then(m => ({ default: m.ResponsiveContainer })), { ssr: false })
+const PieChart = dynamic(() => import('recharts').then(m => ({ default: m.PieChart })), { ssr: false })
+const Pie = dynamic(() => import('recharts').then(m => ({ default: m.Pie })), { ssr: false })
+const Cell = dynamic(() => import('recharts').then(m => ({ default: m.Cell })), { ssr: false })
+const Legend = dynamic(() => import('recharts').then(m => ({ default: m.Legend })), { ssr: false })
 
 interface Tracker {
   id: string
@@ -289,6 +300,7 @@ export default function TrackersPage() {
 
           {/* Chart View */}
           {viewMode === 'chart' && !loading && (
+            <Suspense fallback={<div className="text-white/30 text-sm text-center py-8">Loading charts...</div>}>
             <div className="space-y-4">
               {trackers.length === 0 ? (
                 <div className="text-center py-16 glass-panel rounded-2xl">
@@ -381,6 +393,7 @@ export default function TrackersPage() {
                 </>
               )}
             </div>
+            </Suspense>
           )}
 
           {/* List View */}

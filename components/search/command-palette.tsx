@@ -12,6 +12,7 @@ import {
   File,
   Loader2,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react'
 
 // ---------- Types ----------
@@ -57,12 +58,20 @@ interface FileResult {
   tags?: string | null
 }
 
+interface ConversationResult {
+  id: string
+  title: string | null
+  updatedAt: string
+  messageCount?: number
+}
+
 interface SearchResults {
   tasks: TaskResult[]
   reminders: ReminderResult[]
   notes: NoteResult[]
   memories: MemoryResult[]
   files: FileResult[]
+  conversations: ConversationResult[]
 }
 
 type FlatResult =
@@ -71,6 +80,7 @@ type FlatResult =
   | { type: 'note'; data: NoteResult }
   | { type: 'memory'; data: MemoryResult }
   | { type: 'file'; data: FileResult }
+  | { type: 'conversation'; data: ConversationResult }
 
 // ---------- Helpers ----------
 
@@ -87,6 +97,7 @@ function flattenResults(results: SearchResults): FlatResult[] {
   results.notes.forEach((d) => flat.push({ type: 'note', data: d }))
   results.memories.forEach((d) => flat.push({ type: 'memory', data: d }))
   results.files.forEach((d) => flat.push({ type: 'file', data: d }))
+  results.conversations?.forEach((d) => flat.push({ type: 'conversation', data: d }))
   return flat
 }
 
@@ -97,6 +108,7 @@ function getRoute(item: FlatResult) {
     case 'note': return '/notes'
     case 'memory': return '/memory'
     case 'file': return '/files'
+    case 'conversation': return '/chat'
   }
 }
 
@@ -108,6 +120,7 @@ const TYPE_META: Record<FlatResult['type'], { icon: React.ElementType; label: st
   note: { icon: FileText, label: 'Note', color: 'text-yellow-400' },
   memory: { icon: Brain, label: 'Memory', color: 'text-pink-400' },
   file: { icon: File, label: 'File', color: 'text-green-400' },
+  conversation: { icon: MessageSquare, label: 'Chat', color: 'text-violet-400' },
 }
 
 function ResultRow({
@@ -150,6 +163,9 @@ function ResultRow({
   } else if (item.type === 'file') {
     title = item.data.originalName || item.data.name
     subtitle = `${item.data.mimeType} · ${formatBytes(item.data.size)}${item.data.tags ? ` · ${item.data.tags}` : ''}`
+  } else if (item.type === 'conversation') {
+    title = item.data.title || 'Untitled conversation'
+    subtitle = `Updated ${new Date(item.data.updatedAt).toLocaleDateString()}`
   }
 
   return (
@@ -318,6 +334,7 @@ export function CommandPalette({ isOpen, onClose, initialQuery = '' }: CommandPa
     { key: 'note' as const, label: 'Notes', items: flatItems.filter((i) => i.type === 'note') as FlatResult[] },
     { key: 'memory' as const, label: 'Memory', items: flatItems.filter((i) => i.type === 'memory') as FlatResult[] },
     { key: 'file' as const, label: 'Files', items: flatItems.filter((i) => i.type === 'file') as FlatResult[] },
+    { key: 'conversation' as const, label: 'Conversations', items: flatItems.filter((i) => i.type === 'conversation') as FlatResult[] },
   ]).filter((g) => g.items.length > 0)
 
   // Track cumulative index for active highlight
@@ -413,7 +430,7 @@ export function CommandPalette({ isOpen, onClose, initialQuery = '' }: CommandPa
                   {group.items.map((item) => {
                     const idx = cursor++
                     return (
-                      <div key={`${item.type}-${item.type === 'task' ? (item.data as TaskResult).id : item.type === 'reminder' ? (item.data as ReminderResult).id : item.type === 'note' ? (item.data as NoteResult).id : item.type === 'memory' ? (item.data as MemoryResult).id : (item.data as FileResult).id}`} data-index={idx}>
+                      <div key={`${item.type}-${item.data.id}`} data-index={idx}>
                         <ResultRow
                           item={item}
                           isActive={idx === activeIndex}

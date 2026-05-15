@@ -60,16 +60,28 @@ const REVIEW_FOCUSES = [
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────────
 
-function formatContent(content: string): string {
-  return content
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code class="bg-cyan-400/10 text-cyan-400 px-1 py-0.5 rounded text-sm nexus-mono">$1</code>')
-    .replace(/^## (.*$)/gm, '<h3 class="text-white font-semibold mt-4 mb-1.5 text-base flex items-center gap-2"><span class="w-1 h-4 bg-cyan-400 rounded-full inline-block"></span>$1</h3>')
-    .replace(/^# (.*$)/gm, '<h2 class="text-white font-bold mt-4 mb-2 text-lg">$1</h2>')
-    .replace(/^- \[ \] (.*$)/gm, '<label class="flex items-center gap-2 py-0.5"><input type="checkbox" class="accent-cyan-400" /> <span>$1</span></label>')
-    .replace(/^- (.*$)/gm, '<li class="flex gap-2 py-0.5"><span class="text-cyan-400 mt-1 flex-shrink-0">•</span><span>$1</span></li>')
-    .replace(/\n/g, '<br/>')
+function SafeContent({ text }: { text: string }) {
+  return (
+    <div className="space-y-1">
+      {text.split('\n').map((line, i) => {
+        if (line.startsWith('```')) return <div key={i} className="h-px bg-white/10 my-2" />
+        if (line.startsWith('# ')) return <p key={i} className="text-white font-bold text-sm mt-3">{line.slice(2)}</p>
+        if (line.startsWith('## ')) return <p key={i} className="text-white/80 font-semibold text-sm mt-2">{line.slice(3)}</p>
+        if (line.startsWith('- ') || line.startsWith('* ')) return <p key={i} className="text-white/70 text-sm pl-3">• {line.slice(2)}</p>
+        if (line.trim() === '') return <div key={i} className="h-1" />
+        // inline code: `code`
+        const parts = line.split(/(`[^`]+`)/)
+        return (
+          <p key={i} className="text-white/70 text-sm">
+            {parts.map((p, j) => p.startsWith('`') && p.endsWith('`')
+              ? <code key={j} className="bg-white/10 px-1 rounded text-cyan-300 text-xs font-mono">{p.slice(1, -1)}</code>
+              : p
+            )}
+          </p>
+        )
+      })}
+    </div>
+  )
 }
 
 // ─── Result Panel ────────────────────────────────────────────────────────────
@@ -131,10 +143,7 @@ function ResultPanel({ result, loading, placeholder, mono = false }: ResultPanel
               {result}
             </pre>
           ) : (
-            <div
-              className="text-white/80 text-sm leading-relaxed space-y-0.5"
-              dangerouslySetInnerHTML={{ __html: formatContent(result) }}
-            />
+            <SafeContent text={result} />
           )
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-3 py-12 text-center">

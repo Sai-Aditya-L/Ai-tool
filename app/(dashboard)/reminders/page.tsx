@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, Bell, Clock, Check, Trash2, X, AlertCircle, AlarmClock } from 'lucide-react'
+import { Plus, Bell, Clock, Check, Trash2, X, AlertCircle, AlarmClock, CheckSquare } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -81,6 +81,8 @@ export default function RemindersPage() {
   const [showForm, setShowForm] = useState(false)
   const [statusFilter, setStatusFilter] = useState('pending')
   const [snoozeOpenId, setSnoozeOpenId] = useState<string | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -171,6 +173,52 @@ export default function RemindersPage() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function bulkComplete() {
+    const ids = Array.from(selectedIds)
+    try {
+      const res = await fetch('/api/reminders/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete', ids }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`${ids.length} reminder${ids.length !== 1 ? 's' : ''} completed`)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+      fetchReminders()
+    } catch {
+      toast.error('Failed to complete reminders')
+    }
+  }
+
+  async function bulkDelete() {
+    const ids = Array.from(selectedIds)
+    if (!confirm(`Delete ${ids.length} reminder${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    try {
+      const res = await fetch('/api/reminders/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', ids }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`${ids.length} reminder${ids.length !== 1 ? 's' : ''} deleted`)
+      setSelectedIds(new Set())
+      setSelectMode(false)
+      fetchReminders()
+    } catch {
+      toast.error('Failed to delete reminders')
+    }
+  }
+
   function getDefaultDueAt() {
     const d = new Date()
     d.setHours(d.getHours() + 1, 0, 0, 0)
@@ -203,6 +251,18 @@ export default function RemindersPage() {
             >
               <Plus size={16} />
               New Reminder
+            </button>
+            <button
+              onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()) }}
+              className={cn(
+                'flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-all',
+                selectMode
+                  ? 'bg-cyan-400/15 border-cyan-400/30 text-cyan-400'
+                  : 'text-white/40 border-white/10 hover:border-white/20 hover:text-white/60'
+              )}
+            >
+              <CheckSquare size={14} />
+              Select
             </button>
             <div className="flex gap-1">
               {['pending', 'completed', 'snoozed'].map(s => (
@@ -332,15 +392,31 @@ export default function RemindersPage() {
                   key={r.id}
                   className={cn(
                     'glass-panel-hover rounded-xl p-4 flex items-start gap-3',
-                    isOverdue(r.dueAt) && r.status === 'pending' ? 'border-red-500/30' : ''
+                    isOverdue(r.dueAt) && r.status === 'pending' ? 'border-red-500/30' : '',
+                    selectMode && selectedIds.has(r.id) ? 'ring-2 ring-cyan-400/40' : ''
                   )}
                 >
-                  <div className={cn(
-                    'w-2 h-2 rounded-full mt-2 flex-shrink-0',
-                    r.priority === 'urgent' ? 'bg-red-400' :
-                    r.priority === 'high' ? 'bg-orange-400' :
-                    r.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
-                  )} />
+                  {/* Select checkbox */}
+                  {selectMode ? (
+                    <button
+                      onClick={() => toggleSelect(r.id)}
+                      className={cn(
+                        'mt-1 w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all',
+                        selectedIds.has(r.id)
+                          ? 'bg-cyan-400/20 border-cyan-400'
+                          : 'border-white/30 hover:border-cyan-400/60'
+                      )}
+                    >
+                      {selectedIds.has(r.id) && <Check size={12} className="text-cyan-400" />}
+                    </button>
+                  ) : (
+                    <div className={cn(
+                      'w-2 h-2 rounded-full mt-2 flex-shrink-0',
+                      r.priority === 'urgent' ? 'bg-red-400' :
+                      r.priority === 'high' ? 'bg-orange-400' :
+                      r.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
+                    )} />
+                  )}
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
@@ -420,6 +496,32 @@ export default function RemindersPage() {
           )}
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass-panel rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl border border-cyan-400/20">
+          <span className="text-white/60 text-sm nexus-mono">{selectedIds.size} selected</span>
+          <button
+            onClick={bulkComplete}
+            className="nexus-btn-primary text-xs flex items-center gap-1.5 py-1.5 px-3"
+          >
+            <Check size={13} /> Complete All
+          </button>
+          <button
+            onClick={bulkDelete}
+            className="text-xs flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-red-400/30 text-red-400 hover:bg-red-400/10 transition-all"
+          >
+            <Trash2 size={13} /> Delete All
+          </button>
+          <button
+            onClick={() => { setSelectedIds(new Set()); setSelectMode(false) }}
+            className="text-white/40 hover:text-white/70 transition-colors p-1"
+            title="Cancel"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

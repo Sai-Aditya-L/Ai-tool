@@ -186,21 +186,30 @@ export default function SettingsPage() {
   async function exportData() {
     setExportingData(true)
     try {
-      const [tasksRes, notesRes, remindersRes] = await Promise.all([
+      const [tasksRes, notesRes, remindersRes, memoryRes, convsRes, agentsRes] = await Promise.all([
         fetch('/api/tasks'),
         fetch('/api/notes'),
         fetch('/api/reminders'),
+        fetch('/api/memory'),
+        fetch('/api/conversations'),
+        fetch('/api/agents'),
       ])
-      const [tasksData, notesData, remindersData] = await Promise.all([
+      const [tasksData, notesData, remindersData, memoryData, convsData, agentsData] = await Promise.all([
         tasksRes.json(),
         notesRes.json(),
         remindersRes.json(),
+        memoryRes.json(),
+        convsRes.json(),
+        agentsRes.json(),
       ])
       const exportPayload = {
         exportedAt: new Date().toISOString(),
         tasks: tasksData.tasks ?? [],
         notes: notesData.notes ?? [],
         reminders: remindersData.reminders ?? [],
+        memories: memoryData.memories ?? [],
+        conversations: convsData.conversations ?? [],
+        agents: agentsData.agents ?? [],
       }
       const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)

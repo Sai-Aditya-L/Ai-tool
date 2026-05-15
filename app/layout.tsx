@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/providers/auth-provider'
 import { ToastProvider } from '@/components/providers/toast-provider'
 import { SearchProvider } from '@/components/search/search-provider'
 import { PWAProvider } from '@/components/providers/pwa-provider'
+import { KeyboardShortcutsProvider } from '@/components/providers/keyboard-shortcuts-provider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -58,7 +59,9 @@ export default function RootLayout({
           <PWAProvider>
             <ToastProvider>
               <SearchProvider>
-                {children}
+                <KeyboardShortcutsProvider>
+                  {children}
+                </KeyboardShortcutsProvider>
               </SearchProvider>
             </ToastProvider>
           </PWAProvider>
