@@ -1,17 +1,14 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { motion } from 'framer-motion'
 import { Sidebar } from '@/components/layout/sidebar'
 import { CommandPalette } from '@/components/ui/command-palette'
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect('/login')
-
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#000810' }}>
       {/* Holographic grid background */}
@@ -47,7 +44,14 @@ export default async function DashboardLayout({
 
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden relative z-10">
-        {children}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+          className="flex-1 flex flex-col overflow-hidden"
+        >
+          {children}
+        </motion.div>
       </main>
 
       <CommandPalette />
