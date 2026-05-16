@@ -461,6 +461,8 @@ export default function TasksPage() {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  useEffect(() => { document.title = 'Tasks | NEXUS' }, [])
+
   useEffect(() => { fetchTasks() }, [filter])
 
   async function fetchTasks() {

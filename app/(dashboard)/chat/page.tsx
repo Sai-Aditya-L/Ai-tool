@@ -1,5 +1,8 @@
+import { Metadata } from 'next'
 import { Header } from '@/components/layout/header'
 import { ChatInterface } from '@/components/chat/chat-interface'
+
+export const metadata: Metadata = { title: 'AI Chat | NEXUS' }
 
 export default function ChatPage() {
   return (
