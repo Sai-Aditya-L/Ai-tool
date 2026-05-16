@@ -46,6 +46,7 @@ const navItems = [
       { href: '/travel', icon: Plane, label: 'Travel', color: 'text-sky-400' },
       { href: '/cybersecurity', icon: Shield, label: 'Cybersecurity', color: 'text-red-400' },
       { href: '/trackers', icon: BarChart2, label: 'Trackers', color: 'text-orange-400' },
+      { href: '/usage', icon: BarChart2, label: 'AI Usage', color: 'text-amber-400' },
       { href: '/automations', icon: Zap, label: 'Automations', color: 'text-yellow-400' },
       { href: '/dev', icon: Code2, label: 'Dev Workspace', color: 'text-orange-400' },
       { href: '/files', icon: FolderOpen, label: 'Files', color: 'text-cyan-400' },
