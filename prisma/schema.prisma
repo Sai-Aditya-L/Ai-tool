@@ -110,6 +110,8 @@ model UserPreferences {
   aiModel         String   @default("claude-sonnet-4-6")
   aiProvider      String   @default("anthropic")
   openaiModel     String   @default("gpt-4o")
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
   personalityMode String   @default("professional")
   currentMode     String   @default("personal")
   onboardingDone  Boolean  @default(false)

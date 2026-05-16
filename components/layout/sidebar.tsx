@@ -24,6 +24,7 @@ const navItems = [
       { href: '/chat', icon: MessageSquare, label: 'AI Chat', color: 'text-violet-400' },
       { href: '/voice', icon: Mic, label: 'Voice Center', color: 'text-cyan-400' },
       { href: '/agents', icon: Bot, label: 'Agent Center', color: 'text-violet-400' },
+      { href: '/onboarding', icon: Sparkles, label: 'Setup Guide', color: 'text-cyan-400' },
     ],
   },
   {
@@ -81,6 +82,8 @@ const navItems = [
       { href: '/observability', icon: HeartPulse, label: 'Observability', color: 'text-rose-400' },
       { href: '/mobile', icon: Smartphone, label: 'Mobile & PWA', color: 'text-cyan-400' },
       { href: '/workspaces', icon: Users, label: 'Workspaces', color: 'text-violet-400' },
+      { href: '/security', icon: Shield, label: 'Security', color: 'text-green-400' },
+      { href: '/shortcuts', icon: Zap, label: 'Shortcuts', color: 'text-yellow-400' },
       { href: '/settings', icon: Settings, label: 'Settings', color: 'text-white/60' },
       { href: '/achievements', icon: Trophy, label: 'Achievements', color: 'text-yellow-400' },
     ],
