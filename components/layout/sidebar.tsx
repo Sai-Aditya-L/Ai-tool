@@ -11,7 +11,7 @@ import {
   StickyNote, Mail, Bot, Code2, Wifi, Sparkles, Newspaper, TrendingUp,
   Wrench, BrainCircuit, Monitor, Music2, Home, FlameKindling,
   Shield, Target, Network, Microscope, Plane, Lock, BookOpen, MousePointer2, Gauge,
-  Eye, HeartPulse, Blocks
+  Eye, HeartPulse, Blocks, Smartphone, Users
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -73,6 +73,8 @@ const navItems = [
       { href: '/connected-devices', icon: Wifi, label: 'Devices', color: 'text-cyan-400' },
       { href: '/system', icon: Monitor, label: 'System Monitor', color: 'text-green-400' },
       { href: '/observability', icon: HeartPulse, label: 'Observability', color: 'text-rose-400' },
+      { href: '/mobile', icon: Smartphone, label: 'Mobile & PWA', color: 'text-cyan-400' },
+      { href: '/workspaces', icon: Users, label: 'Workspaces', color: 'text-violet-400' },
       { href: '/settings', icon: Settings, label: 'Settings', color: 'text-white/60' },
     ],
   },
