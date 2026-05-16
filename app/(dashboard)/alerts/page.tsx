@@ -2,8 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
-import { Bell, Brain, Check, Loader2, AlertTriangle, Info, Zap } from 'lucide-react'
+import { Bell, Brain, Check, Loader2, AlertTriangle, Info, Zap, Calendar, Bot } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+interface WorldStateSummary {
+  overdueTasks: Array<{ id: string }>
+  dueTodayTasks: Array<{ id: string }>
+  upcomingEvents: Array<{ id: string; startTime: string }>
+  activeAgents: Array<{ id: string }>
+}
 
 interface ProactiveAlert {
   id: string
@@ -31,6 +38,17 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<ProactiveAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
+  const [worldState, setWorldState] = useState<WorldStateSummary | null>(null)
+
+  const fetchWorldState = async () => {
+    try {
+      const res = await fetch('/api/world-state')
+      if (res.ok) {
+        const data = await res.json()
+        setWorldState(data)
+      }
+    } catch {}
+  }
 
   const fetchAlerts = async () => {
     try {
@@ -71,7 +89,10 @@ export default function AlertsPage() {
     } catch {}
   }
 
-  useEffect(() => { fetchAlerts() }, [])
+  useEffect(() => {
+    fetchAlerts()
+    fetchWorldState()
+  }, [])
 
   const getPriorityIcon = (body: string) => {
     const priority = parsePriority(body)
@@ -102,6 +123,48 @@ export default function AlertsPage() {
       <Header title="Proactive Alerts" subtitle="NEXUS monitors your system and alerts you proactively" />
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="max-w-[800px] mx-auto">
+
+          {/* World State summary bar */}
+          {worldState && (
+            <div className="hud-stat-card rounded-xl p-4 mb-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                <span className="hud-label">WORLD STATE</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="hud-panel rounded-lg p-3 border border-red-400/20">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertTriangle size={11} className="text-red-400" />
+                    <span className="hud-label text-[10px]" style={{ color: 'rgba(248,113,113,0.7)' }}>OVERDUE</span>
+                  </div>
+                  <div className="text-xl font-bold text-red-400">{worldState.overdueTasks.length}</div>
+                  <div className="text-white/30 text-[10px]">tasks</div>
+                </div>
+                <div className="hud-panel rounded-lg p-3 border border-cyan-400/20">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Calendar size={11} className="text-cyan-400" />
+                    <span className="hud-label text-[10px]">EVENTS TODAY</span>
+                  </div>
+                  <div className="text-xl font-bold hud-value">
+                    {worldState.upcomingEvents.filter(e => {
+                      const d = new Date(e.startTime); const t = new Date()
+                      return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear()
+                    }).length}
+                  </div>
+                  <div className="text-white/30 text-[10px]">on calendar</div>
+                </div>
+                <div className="hud-panel rounded-lg p-3 border border-violet-400/20">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Bot size={11} className="text-violet-400" />
+                    <span className="hud-label text-[10px]" style={{ color: 'rgba(167,139,250,0.7)' }}>ACTIVE AGENTS</span>
+                  </div>
+                  <div className="text-xl font-bold text-violet-400">{worldState.activeAgents.length}</div>
+                  <div className="text-white/30 text-[10px]">running</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Header action */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
