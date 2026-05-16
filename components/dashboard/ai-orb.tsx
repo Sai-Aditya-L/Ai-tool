@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Mic, MessageSquare, Zap } from 'lucide-react'
+import { Mic, MessageSquare, Zap, ChevronRight } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface AIOrbProps {
   userName?: string | null
@@ -18,6 +19,9 @@ const SYSTEM_METRICS = [
 export function AIOrb({ userName }: AIOrbProps) {
   const [greeting, setGreeting] = useState('')
   const [time, setTime] = useState('')
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestionIdx, setSuggestionIdx] = useState(0)
+  const router = useRouter()
   const [date, setDate] = useState('')
   const [statusMsg, setStatusMsg] = useState('ALL SYSTEMS NOMINAL')
   const [tick, setTick] = useState(0)
@@ -40,6 +44,12 @@ export function AIOrb({ userName }: AIOrbProps) {
     const msgs = ['ALL SYSTEMS NOMINAL', 'NEURAL LINK ACTIVE', 'READY TO ASSIST', 'MEMORY SYNC OK', 'MONITORING WORKFLOWS']
     let i = 0
     const mv = setInterval(() => { i = (i + 1) % msgs.length; setStatusMsg(msgs[i]) }, 5000)
+
+    // Load smart suggestions
+    fetch('/api/suggestions')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.suggestions && setSuggestions(d.suggestions))
+      .catch(() => {})
 
     return () => { clearInterval(iv); clearInterval(mv) }
   }, [])
@@ -203,6 +213,23 @@ export function AIOrb({ userName }: AIOrbProps) {
           <Zap size={13} />
         </Link>
       </div>
+
+      {/* Smart suggestions */}
+      {suggestions.length > 0 && (
+        <div className="w-full mt-4 space-y-1.5">
+          <p className="hud-label text-center" style={{ fontSize: 8, opacity: 0.35 }}>NEXUS SUGGESTS</p>
+          {suggestions.slice(0, 2).map((s, i) => (
+            <button
+              key={i}
+              onClick={() => router.push(`/chat?q=${encodeURIComponent(s)}`)}
+              className="w-full text-left text-xs text-white/50 hover:text-white/80 px-2.5 py-1.5 rounded-lg border border-white/5 hover:border-cyan-400/20 bg-white/2 hover:bg-cyan-400/5 transition-all flex items-center gap-2"
+            >
+              <ChevronRight size={10} className="text-cyan-400/40 flex-shrink-0" />
+              <span className="truncate">{s}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Bottom data bar */}
       <div className="absolute bottom-3 left-3 right-3 flex justify-between">
