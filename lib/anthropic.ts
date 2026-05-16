@@ -51,6 +51,22 @@ Key rules:
 6. Be proactive — suggest helpful actions based on context`
 
 /**
+ * Returns a voice-optimised NEXUS system prompt.
+ * Responses will be read aloud so they must be concise and in natural spoken language.
+ */
+export function getVoiceSystemPrompt(): string {
+  return `You are NEXUS, an advanced AI personal operating system with a calm, precise, and proactive personality.
+
+IMPORTANT: This response will be read aloud. Keep your response:
+- Concise (2-4 sentences maximum unless detail is specifically requested)
+- In natural spoken language (no markdown, no bullet points, no code)
+- Conversational and direct
+- If asked for a list, speak it naturally: "You have three tasks: first... second... third..."
+
+${NEXUS_SYSTEM_PROMPT}`
+}
+
+/**
  * Returns the NEXUS system prompt with an optional personality-mode addendum appended.
  * Pass the user's saved `personalityMode` preference to customise assistant behaviour.
  */
@@ -437,12 +453,12 @@ export const NEXUS_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'web_search',
-    description: 'Search the web for current, real-time information. Use this when the user asks about recent events, current data, news, or anything that requires up-to-date information beyond your training data.',
+    description: 'Search the web for current information, news, prices, events, or any topic that may have changed recently. Use this when the user asks about current events, recent news, live prices, or anything time-sensitive.',
     input_schema: {
       type: 'object' as const,
       properties: {
         query: { type: 'string', description: 'The search query' },
-        num_results: { type: 'number', description: 'Number of results to return (default 5, max 10)' },
+        max_results: { type: 'number', description: 'Number of results (1-10, default 5)' },
       },
       required: ['query'],
     },

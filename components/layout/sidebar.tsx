@@ -43,6 +43,8 @@ const navItems = [
   {
     group: 'Intelligence',
     items: [
+      { href: '/analytics', icon: BarChart2, label: 'Analytics', color: 'text-cyan-400' },
+      { href: '/documents', icon: FileText, label: 'Document AI', color: 'text-amber-400' },
       { href: '/memory', icon: Brain, label: 'Memory', color: 'text-violet-400' },
       { href: '/knowledge-graph', icon: Network, label: 'Knowledge Graph', color: 'text-violet-400' },
       { href: '/daily-summaries', icon: Sparkles, label: 'Daily Briefing', color: 'text-cyan-400' },
@@ -50,6 +52,7 @@ const navItems = [
       { href: '/focus', icon: Timer, label: 'Focus Timer', color: 'text-amber-400' },
       { href: '/search', icon: Search, label: 'Global Search', color: 'text-cyan-400' },
       { href: '/meetings', icon: Calendar, label: 'Meetings', color: 'text-blue-400' },
+      { href: '/transcribe', icon: Mic, label: 'Live Transcription', color: 'text-red-400' },
       { href: '/travel', icon: Plane, label: 'Travel', color: 'text-sky-400' },
       { href: '/cybersecurity', icon: Shield, label: 'Cybersecurity', color: 'text-red-400' },
       { href: '/trackers', icon: BarChart2, label: 'Trackers', color: 'text-orange-400' },

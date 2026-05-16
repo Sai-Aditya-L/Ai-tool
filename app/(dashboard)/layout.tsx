@@ -8,6 +8,9 @@ import { Sun, Moon } from 'lucide-react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { CommandPalette } from '@/components/ui/command-palette'
 import { QuickCapture } from '@/components/ui/quick-capture'
+import { NexusVoiceButton } from '@/components/voice/nexus-voice-button'
+import { NexusParticles } from '@/components/ui/nexus-particles'
+import { NexusHudOverlay } from '@/components/ui/nexus-hud-overlay'
 
 export default function DashboardLayout({
   children,
@@ -118,6 +121,9 @@ export default function DashboardLayout({
       </button>
 
       <QuickCapture />
+      <NexusVoiceButton />
+      <NexusHudOverlay />
+      <NexusParticles count={50} />
     </div>
   )
 }

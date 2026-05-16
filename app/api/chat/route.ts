@@ -522,22 +522,15 @@ async function executeToolCall(
       }
 
       case 'web_search': {
-        const query = toolInput.query as string
-        const num = (toolInput.num_results as number) || 5
-        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
-        try {
-          const res = await fetch(`${baseUrl}/api/tools/search?q=${encodeURIComponent(query)}&num=${num}`)
-          const data = await res.json()
-          if (data.results?.length > 0) {
-            const formatted = data.results.map((r: any, i: number) =>
-              `${i + 1}. **${r.title}**\n   ${r.snippet}\n   Source: ${r.url}`
+        const { query, max_results = 5 } = toolInput as { query: string; max_results?: number }
+        const { searchWeb } = await import('@/lib/web-search')
+        const results = await searchWeb(query, Math.min(max_results, 10))
+        const formatted = results.length > 0
+          ? results.map((r, i) =>
+              `${i + 1}. **${r.title}**\n   ${r.snippet}\n   Source: ${r.url}${r.publishedDate ? `\n   Date: ${r.publishedDate}` : ''}`
             ).join('\n\n')
-            return `Web search results for "${query}" (via ${data.source || 'search'}):\n\n${formatted}`
-          }
-          return data.error || `No results found for "${query}". ${process.env.BRAVE_SEARCH_API_KEY ? '' : 'Add BRAVE_SEARCH_API_KEY to .env for full web search.'}`
-        } catch {
-          return `Web search failed for "${query}"`
-        }
+          : 'No results found for this query.'
+        return `Web search results for "${query}":\n\n${formatted}`
       }
 
       case 'wikipedia_lookup': {
