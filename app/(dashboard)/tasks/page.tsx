@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -15,6 +15,8 @@ interface Task {
   dueDate?: string
   tags?: string
   subtasks?: Task[]
+  isRecurring?: boolean
+  recurringSchedule?: string
 }
 
 const PRIORITIES = ['urgent', 'high', 'medium', 'low']
@@ -348,10 +350,13 @@ function TaskRow({ task, onStatusChange, onDelete, onEdit, onTaskUpdate, selectM
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className={cn(
-              'text-sm font-medium',
+              'text-sm font-medium flex items-center gap-1.5',
               task.status === 'completed' ? 'line-through text-white/30' : 'text-white/85'
             )}>
               {task.title}
+              {task.isRecurring && (
+                <RefreshCw size={11} className="text-cyan-400/70 flex-shrink-0" title={`Recurring: ${task.recurringSchedule}`} />
+              )}
             </p>
             <div className="flex items-center gap-1 flex-shrink-0">
               <span className={cn(
@@ -452,7 +457,7 @@ export default function TasksPage() {
   const [filter, setFilter] = useState({ status: 'pending', priority: '' })
   const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('all')
   const [editingTask, setEditingTask] = useState<Task | null>(null)
-  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', dueDate: '', tags: '' })
+  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', dueDate: '', tags: '', isRecurring: false, recurringSchedule: 'daily' })
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -485,7 +490,7 @@ export default function TasksPage() {
       })
       if (!res.ok) throw new Error()
       toast.success('Task created')
-      setForm({ title: '', description: '', priority: 'medium', dueDate: '', tags: '' })
+      setForm({ title: '', description: '', priority: 'medium', dueDate: '', tags: '', isRecurring: false, recurringSchedule: 'daily' })
       setShowForm(false)
       fetchTasks()
     } catch {
@@ -708,6 +713,33 @@ export default function TasksPage() {
                   onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
                   className="nexus-input"
                 />
+                {/* Recurring options */}
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={form.isRecurring}
+                      onChange={e => setForm(f => ({ ...f, isRecurring: e.target.checked }))}
+                      className="w-4 h-4 rounded accent-cyan-400"
+                    />
+                    <span className="text-sm text-white/60 flex items-center gap-1.5">
+                      <RefreshCw size={13} className="text-cyan-400/70" />
+                      Recurring
+                    </span>
+                  </label>
+                  {form.isRecurring && (
+                    <select
+                      value={form.recurringSchedule}
+                      onChange={e => setForm(f => ({ ...f, recurringSchedule: e.target.value }))}
+                      className="nexus-input w-auto text-sm py-1.5 px-3"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="weekdays">Weekdays</option>
+                    </select>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <button type="submit" className="nexus-btn-primary flex-1">Create Task</button>
                   <button type="button" onClick={() => setShowForm(false)} className="nexus-btn-secondary px-4">
