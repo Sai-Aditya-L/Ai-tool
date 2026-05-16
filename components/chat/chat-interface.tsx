@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Send, Mic, Paperclip, Zap, RotateCcw, Copy, Check, StopCircle, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, History, ImageIcon, X as XIcon, FileText, Globe } from 'lucide-react'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -39,6 +40,7 @@ const SUGGESTED_PROMPTS = [
 const TRANSLATE_LANGUAGES = ['Spanish', 'French', 'German', 'Japanese', 'Arabic', 'Hindi']
 
 export function ChatInterface() {
+  const searchParams = useSearchParams()
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -130,6 +132,18 @@ export function ChatInterface() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Auto-send query from URL param (e.g. from dashboard suggestions)
+  const autoSentRef = useRef(false)
+  useEffect(() => {
+    const q = searchParams?.get('q')
+    if (q && !autoSentRef.current) {
+      autoSentRef.current = true
+      setInput(q)
+      // Small delay so component is fully mounted
+      setTimeout(() => sendMessage(q), 300)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
