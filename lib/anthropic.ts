@@ -542,4 +542,17 @@ export const NEXUS_TOOLS: Anthropic.Tool[] = [
       required: [],
     },
   },
+  {
+    name: 'schedule_task',
+    description: 'Find the best time to schedule a task based on calendar availability and the user\'s focus patterns. Use when user asks when to work on something, or wants to schedule time for a task.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        task_name: { type: 'string', description: 'Name of the task to schedule' },
+        duration_minutes: { type: 'number', description: 'How long the task will take in minutes (default: 60)' },
+        days_ahead: { type: 'number', description: 'How many days ahead to look for slots (default: 5)' },
+      },
+      required: ['task_name'],
+    },
+  },
 ]

@@ -641,6 +641,38 @@ async function executeToolCall(
         return JSON.stringify({ success: true, sessionId: session2.id, duration, message: `Focus session started! ${duration} minute${duration !== 1 ? 's' : ''} of deep work${toolInput.task_name ? ` on "${toolInput.task_name}"` : ''}. Head to the Focus Timer page to track it.` })
       }
 
+      case 'schedule_task': {
+        const taskNameSched = toolInput.task_name as string
+        const durationSched = (toolInput.duration_minutes as number) || 60
+        const daysAheadSched = (toolInput.days_ahead as number) || 5
+        const nowSched = new Date()
+        const futureSched = new Date(nowSched.getTime() + daysAheadSched * 24 * 60 * 60 * 1000)
+        try {
+          const [schedEvents, schedFocus] = await Promise.all([
+            prisma.calendarEvent.findMany({ where: { userId, startTime: { gte: nowSched, lte: futureSched } }, orderBy: { startTime: 'asc' }, select: { title: true, startTime: true, endTime: true }, take: 20 }),
+            prisma.focusSession.findMany({ where: { userId, completed: true }, orderBy: { createdAt: 'desc' }, take: 20, select: { createdAt: true } }),
+          ])
+          const hourCounts2: Record<number, number> = {}
+          for (const s of schedFocus) { const h = s.createdAt.getHours(); hourCounts2[h] = (hourCounts2[h] || 0) + 1 }
+          const peakHour2 = Object.entries(hourCounts2).sort((a, b) => b[1] - a[1])[0]?.[0]
+          const eventsStr2 = schedEvents.map(e => `"${e.title}" ${new Date(e.startTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} to ${new Date(e.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`).join('\n') || 'No events'
+          const schedResponse = await anthropic.messages.create({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 400,
+            system: 'Return JSON only: {"slots": [{"day": "...", "time": "...", "reason": "...", "score": 9}], "recommendation": "..."}. Suggest 3 optimal time slots avoiding conflicts. Score 1-10.',
+            messages: [{ role: 'user', content: `Task: "${taskNameSched}" (${durationSched} min)\nNow: ${nowSched.toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}\nPeak focus hour: ${peakHour2 ? (parseInt(peakHour2) >= 12 ? `${parseInt(peakHour2) - 12 || 12}PM` : `${parseInt(peakHour2) || 12}AM`) : 'unknown'}\n\nCalendar:\n${eventsStr2}` }],
+          })
+          const rawSched = schedResponse.content.find(b => b.type === 'text')?.text ?? '{}'
+          const matchSched = rawSched.match(/\{[\s\S]*\}/)
+          const parsedSched = matchSched ? JSON.parse(matchSched[0]) : { slots: [], recommendation: 'No slots found' }
+          const slotsStr = parsedSched.slots?.map((s: { day: string; time: string; reason: string; score: number }, i: number) =>
+            `${i + 1}. **${s.day}, ${s.time}** (score: ${s.score}/10) — ${s.reason}`).join('\n') || 'No available slots found'
+          return `Scheduling analysis for "${taskNameSched}" (${durationSched} min):\n\n${slotsStr}\n\n**Recommendation:** ${parsedSched.recommendation}`
+        } catch {
+          return JSON.stringify({ error: 'Schedule analysis failed' })
+        }
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` })
     }
@@ -783,6 +815,18 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = getSystemPrompt(prefs?.personalityMode ?? undefined) + memoryContext
       + (dailyContext ? `\n\nUser's live daily context:\n${dailyContext}` : '')
+      + (() => {
+          const modeAddendums: Record<string, string> = {
+            work: '\n\nActive mode: WORK — Prioritise professionalism. Focus on tasks, deadlines, and productivity. Be efficient and business-oriented.',
+            coding: '\n\nActive mode: CODING — User is a developer. Provide code-first responses. Use technical language, include code snippets, suggest best practices.',
+            security: '\n\nActive mode: SECURITY — User is in security context. Be precise about risks, use security terminology, flag vulnerabilities proactively.',
+            research: '\n\nActive mode: RESEARCH — Provide thorough, comprehensive answers. Include sources, context, and multiple perspectives. Go deep.',
+            focus: '\n\nActive mode: FOCUS — User is in deep work. Keep responses ULTRA-BRIEF (1-2 sentences max). Only respond to direct questions. Minimise distractions.',
+            travel: '\n\nActive mode: TRAVEL — User is travelling or planning travel. Surface travel-relevant info, time zones, local context.',
+            meeting: '\n\nActive mode: MEETING — User is in or preparing for a meeting. Be concise, help take notes, surface action items.',
+          }
+          return modeAddendums[prefs?.currentMode ?? ''] ?? ''
+        })()
       + `\n\nCurrent user: ${user.name || user.email}\nCurrent time: ${new Date().toISOString()}`
 
     const provider = (prefs?.aiProvider || 'anthropic') as AIProvider
