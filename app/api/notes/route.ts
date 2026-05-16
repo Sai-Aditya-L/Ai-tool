@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  const rl = rateLimit(`notes:${user.id}`, 20, 60_000)
-  if (!rl.success) return rateLimitResponse()
+  const rl = rateLimit(`notes:${user.id}`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   try {
     const body = await req.json()

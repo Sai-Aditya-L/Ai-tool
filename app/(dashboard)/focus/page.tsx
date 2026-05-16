@@ -179,6 +179,7 @@ export default function FocusPage() {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const selectedType = SESSION_TYPES[selectedTypeIdx]
+  const selectedTypeRef = useRef(selectedType)
 
   // ── Fetch data ──────────────────────────────────────────────────────────────
 
@@ -207,6 +208,12 @@ export default function FocusPage() {
     fetchSessions()
   }, [fetchStats, fetchSessions])
 
+  // ── Keep selectedTypeRef in sync ────────────────────────────────────────────
+
+  useEffect(() => {
+    selectedTypeRef.current = selectedType
+  }, [selectedType])
+
   // ── When type changes, reset timer (if not running) ─────────────────────────
 
   useEffect(() => {
@@ -216,17 +223,19 @@ export default function FocusPage() {
     }
   }, [selectedTypeIdx]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Cleanup on unmount ──────────────────────────────────────────────────────
+  // ── Cleanup interval on unmount (and whenever running changes) ─────────────
 
   useEffect(() => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [])
+  }, [running])
 
   // ── Timer complete ──────────────────────────────────────────────────────────
 
-  const handleComplete = useCallback(async (sessionId: string, actualMins: number) => {
+  const handleComplete = useCallback(async (sessionId: string | null, actualMins: number) => {
+    if (!sessionId) return
+
     try {
       await fetch('/api/focus', {
         method: 'PATCH',
@@ -235,15 +244,18 @@ export default function FocusPage() {
       })
     } catch { /* silent */ }
 
+    // Use ref to get the current session type label, avoiding stale closure
+    const label = selectedTypeRef.current.label
+
     // Browser notification
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification('NEXUS Focus', { body: `${selectedType.label} session complete!` })
+      new Notification('NEXUS Focus', { body: `${label} session complete!` })
     }
 
-    toast.success(`${selectedType.label} complete!`, { icon: '🎯' })
+    toast.success(`${label} complete!`, { icon: '🎯' })
     fetchStats()
     fetchSessions()
-  }, [selectedType.label, fetchStats, fetchSessions])
+  }, [fetchStats, fetchSessions])
 
   // ── Start ───────────────────────────────────────────────────────────────────
 
@@ -282,11 +294,11 @@ export default function FocusPage() {
           setRunning(false)
           setElapsedSeconds(sel => {
             const actualMins = Math.ceil((sel + 1) / 60)
-            if (sessionId) handleComplete(sessionId, actualMins)
+            handleComplete(sessionId, actualMins)
             return 0
           })
           setCurrentSessionId(null)
-          setTimeLeft(selectedType.minutes * 60)
+          setTimeLeft(selectedTypeRef.current.minutes * 60)
           return 0
         }
         return prev - 1

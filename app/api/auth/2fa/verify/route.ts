@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/totp'
+import { decrypt } from '@/lib/encryption'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -30,8 +31,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ valid: false, error: '2FA not configured' }, { status: 400 })
     }
 
-    const secret = Buffer.from(stored, 'base64').toString()
-    const valid = verifyToken(token, secret)
+    const secret = (() => { try { return decrypt(stored) } catch { return Buffer.from(stored, 'base64').toString() } })()
+    const valid = verifyToken(token, secret, user.id)
 
     return NextResponse.json({ valid })
   } catch {

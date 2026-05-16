@@ -3,33 +3,31 @@ import { prisma } from '@/lib/prisma'
 import { oauthNonces } from '@/lib/oauth-nonces'
 
 export async function GET(req: NextRequest) {
+  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
   const state = searchParams.get('state') // CSRF nonce
   const error = searchParams.get('error')
 
   if (error) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=github_denied`)
+    return NextResponse.redirect(`${baseUrl}/integrations?error=github_denied`)
   }
 
   if (!code) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=invalid_callback`)
+    return NextResponse.redirect(`${baseUrl}/integrations?error=invalid_callback`)
   }
 
-  // Validate the CSRF nonce
   if (!state) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=missing_state`)
+    return NextResponse.redirect(`${baseUrl}/integrations?error=missing_state`)
   }
 
   const nonceData = oauthNonces.get(state)
   if (!nonceData || nonceData.expiresAt < Date.now()) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=invalid_state`)
+    return NextResponse.redirect(`${baseUrl}/integrations?error=invalid_state`)
   }
-  // Delete immediately — nonces are single-use
   oauthNonces.delete(state)
 
   try {
-    // Exchange code for access token
     const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: {
@@ -40,7 +38,7 @@ export async function GET(req: NextRequest) {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: `${process.env.NEXTAUTH_URL}/api/integrations/github/callback`,
+        redirect_uri: `${baseUrl}/api/integrations/github/callback`,
       }),
     })
 
@@ -48,12 +46,11 @@ export async function GET(req: NextRequest) {
 
     if (!tokenData.access_token) {
       console.error('GitHub token exchange failed:', tokenData)
-      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=oauth_failed`)
+      return NextResponse.redirect(`${baseUrl}/integrations?error=oauth_failed`)
     }
 
     const accessToken: string = tokenData.access_token
 
-    // Fetch GitHub user info
     const userRes = await fetch('https://api.github.com/user', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -62,13 +59,11 @@ export async function GET(req: NextRequest) {
     })
     const githubUser = await userRes.json()
 
-    // Look up our user by ID from the validated nonce data
     const user = await prisma.user.findUnique({ where: { id: nonceData.userId } })
     if (!user) {
-      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=user_not_found`)
+      return NextResponse.redirect(`${baseUrl}/integrations?error=user_not_found`)
     }
 
-    // Upsert integration record
     await prisma.integration.upsert({
       where: { userId_provider: { userId: user.id, provider: 'github' } },
       update: {
@@ -95,7 +90,6 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    // Log activity
     await prisma.activityLog.create({
       data: {
         userId: user.id,
@@ -105,9 +99,9 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?success=github_connected`)
+    return NextResponse.redirect(`${baseUrl}/integrations?success=github_connected`)
   } catch (err) {
     console.error('GitHub OAuth callback error:', err)
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=oauth_failed`)
+    return NextResponse.redirect(`${baseUrl}/integrations?error=oauth_failed`)
   }
 }

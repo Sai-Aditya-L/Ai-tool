@@ -52,12 +52,18 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set())
 
   async function completeTask(taskId: string) {
+    const prevCompleted = completedTasks
     setCompletedTasks(prev => { const s = new Set(Array.from(prev)); s.add(taskId); return s })
-    await fetch(`/api/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'completed' }),
-    })
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' }),
+      })
+      if (!res.ok) throw new Error('Failed')
+    } catch {
+      setCompletedTasks(prevCompleted)
+    }
   }
 
   return (

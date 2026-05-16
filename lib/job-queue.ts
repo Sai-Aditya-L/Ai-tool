@@ -73,11 +73,64 @@ async function executeJob(type: JobType, payload: any): Promise<void> {
       }).catch(() => {})
       break
     }
-    case 'digest_send':
-    case 'email_poll':
-    case 'automation_run':
-      // Placeholder — actual logic would go here
+    case 'digest_send': {
+      const { userId } = payload as { userId: string; type?: string }
+      if (!userId) break
+      const { prisma: db } = await import('./prisma')
+      const [reminders, tasks] = await Promise.all([
+        db.reminder.findMany({
+          where: { userId, status: { not: 'completed' }, dueAt: { lte: new Date() } },
+          take: 10,
+          orderBy: { dueAt: 'asc' },
+        }),
+        db.task.findMany({
+          where: { userId, status: { not: 'completed' }, dueDate: { lte: new Date() } },
+          take: 10,
+          orderBy: { dueDate: 'asc' },
+        }),
+      ])
+      if (reminders.length > 0 || tasks.length > 0) {
+        await db.notification.create({
+          data: {
+            userId,
+            title: 'Daily Digest',
+            body: `You have ${tasks.length} overdue task(s) and ${reminders.length} pending reminder(s).`,
+            type: 'digest',
+            read: false,
+          },
+        })
+      }
       break
+    }
+    case 'email_poll': {
+      const { userId } = payload as { userId: string }
+      if (!userId) break
+      console.log(`[job-queue] email_poll for user ${userId} — requires Google OAuth`)
+      break
+    }
+    case 'automation_run': {
+      const { automationId, userId } = payload as { automationId: string; userId: string }
+      if (!automationId || !userId) break
+      const { prisma: db } = await import('./prisma')
+      const automation = await db.automation.findFirst({
+        where: { id: automationId, userId, status: 'active' },
+      }).catch(() => null)
+      if (!automation) break
+      await db.automation.update({
+        where: { id: automationId },
+        data: { lastRun: new Date() },
+      }).catch(() => null)
+      await db.activityLog.create({
+        data: {
+          userId,
+          action: 'automation_executed',
+          entityType: 'automation',
+          entityId: automationId,
+          metadata: JSON.stringify({ automationId }),
+        },
+      }).catch(() => null)
+      break
+    }
     default:
       break
   }

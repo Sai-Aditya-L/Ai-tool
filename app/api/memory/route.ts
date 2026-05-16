@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 const memorySchema = z.object({
   category: z.string(),
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  const rl = rateLimit(`memory:${user.id}`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
+
   try {
     const body = await req.json()
     const data = memorySchema.parse(body)
@@ -61,6 +65,9 @@ export async function DELETE(req: NextRequest) {
 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const rl = rateLimit(`memory-delete:${user.id}`, 20, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   await prisma.memory.deleteMany({ where: { userId: user.id } })
   return NextResponse.json({ success: true, message: 'All memory cleared' })

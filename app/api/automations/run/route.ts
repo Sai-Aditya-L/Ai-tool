@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { anthropic } from '@/lib/anthropic'
+import { timingSafeEqual } from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,14 +85,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// Cron endpoint — uses timing-safe secret comparison
 export async function GET(req: NextRequest) {
-  // Webhook endpoint for cron services — runs all active automations that are due
-  const secret = req.headers.get('x-cron-secret')
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const now = new Date()
+  const secret = req.headers.get('x-cron-secret') ?? ''
+  const expected = process.env.CRON_SECRET ?? ''
+  let authorized = false
+  try {
+    authorized = secret.length === expected.length &&
+      timingSafeEqual(Buffer.from(secret), Buffer.from(expected))
+  } catch { authorized = false }
+  if (!authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Find all active automations where nextRun <= now, run up to 10
   const automations = await prisma.automation.findMany({

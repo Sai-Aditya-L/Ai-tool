@@ -75,12 +75,16 @@ export default function SystemMonitorPage() {
       es.onopen = () => setConnected(true)
 
       es.onmessage = (e) => {
-        const data: SystemStats = JSON.parse(e.data)
-        setStats(data)
-        setHistory(prev => [
-          ...prev.slice(-29),
-          { time: Date.now(), cpu: data.cpu.avg, mem: data.memory.percent },
-        ])
+        try {
+          const data: SystemStats = JSON.parse(e.data)
+          setStats(data)
+          setHistory(prev => [
+            ...prev.slice(-29),
+            { time: Date.now(), cpu: data.cpu.avg, mem: data.memory.percent },
+          ])
+        } catch {
+          // Ignore malformed SSE frames
+        }
       }
 
       es.onerror = () => {

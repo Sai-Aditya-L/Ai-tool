@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID!,
-    redirect_uri: `${process.env.NEXTAUTH_URL}/api/integrations/github/callback`,
+    redirect_uri: `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/api/integrations/github/callback`,
     scope: 'repo read:user user:email',
     state: nonce,
   })

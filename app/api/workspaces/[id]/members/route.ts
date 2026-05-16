@@ -86,7 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   })
 
-  const inviteUrl = `${process.env.NEXTAUTH_URL}/api/workspaces/invite/${member.inviteToken}`
+  const inviteUrl = `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/api/workspaces/invite/${member.inviteToken}`
 
   return NextResponse.json({ member, inviteUrl }, { status: 201 })
 }

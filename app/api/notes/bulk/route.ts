@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+
+const bulkSchema = z.object({
+  action: z.enum(['delete', 'pin', 'unpin']),
+  ids: z.array(z.string().min(1).max(500)).min(1).max(100),
+})
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -10,12 +16,9 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  const body = await req.json()
-  const { action, ids } = body as { action: 'delete' | 'pin' | 'unpin'; ids: string[] }
-
-  if (!action || !Array.isArray(ids) || ids.length === 0) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
-  }
+  const parse = bulkSchema.safeParse(await req.json())
+  if (!parse.success) return NextResponse.json({ error: 'Invalid input', details: parse.error.flatten() }, { status: 400 })
+  const { action, ids } = parse.data
 
   let affected = 0
 

@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
   const rl = rateLimit(`habits:${user.id}`, 20, 60_000)
-  if (!rl.success) return rateLimitResponse()
+  if (!rl.allowed) return rateLimitResponse()
 
   try {
     const body = await req.json()

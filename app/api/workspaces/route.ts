@@ -61,27 +61,31 @@ export async function POST(req: NextRequest) {
 
   const { name, description, type, color, emoji } = parsed.data
 
-  const workspace = await prisma.sharedWorkspace.create({
-    data: {
-      ownerId: user.id,
-      name: name.trim(),
-      description: description?.trim() || null,
-      type: type || 'personal',
-      color: color || '#00d4ff',
-      emoji: emoji || '🏠',
-    },
-  })
+  const [workspace] = await prisma.$transaction(async (tx) => {
+    const workspace = await tx.sharedWorkspace.create({
+      data: {
+        ownerId: user.id,
+        name: name.trim(),
+        description: description?.trim() || null,
+        type: type || 'personal',
+        color: color || '#00d4ff',
+        emoji: emoji || '🏠',
+      },
+    })
 
-  // Auto-create owner member record
-  await prisma.workspaceMember.create({
-    data: {
-      workspaceId: workspace.id,
-      userId: user.id,
-      email: user.email,
-      role: 'owner',
-      status: 'active',
-      joinedAt: new Date(),
-    },
+    // Auto-create owner member record
+    await tx.workspaceMember.create({
+      data: {
+        workspaceId: workspace.id,
+        userId: user.id,
+        email: user.email,
+        role: 'owner',
+        status: 'active',
+        joinedAt: new Date(),
+      },
+    })
+
+    return [workspace]
   })
 
   const full = await prisma.sharedWorkspace.findUnique({

@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         snippet: e.snippet,
         body: e.body,
         summary: e.summary,
-        labels: e.labels ? JSON.parse(e.labels) : [],
+        labels: e.labels ? (() => { try { return JSON.parse(e.labels!) } catch { return [] } })() : [],
         isRead: e.isRead,
         isStarred: e.isStarred,
         isImportant: e.isImportant,

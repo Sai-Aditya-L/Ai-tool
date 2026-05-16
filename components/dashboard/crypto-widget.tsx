@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
@@ -18,24 +18,31 @@ export function CryptoWidget() {
   const [coins, setCoins] = useState<CoinData[]>([])
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<string>('')
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const fetchCrypto = async () => {
+  const fetchCrypto = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/crypto?coins=bitcoin,ethereum,solana,dogecoin')
+      const res = await fetch('/api/crypto?coins=bitcoin,ethereum,solana,dogecoin', { signal })
       const data = await res.json()
       if (data.coins) {
         setCoins(data.coins.slice(0, 4))
         setLastUpdated(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }))
       }
-    } catch {}
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+    }
     setLoading(false)
-  }
+  }, [])
 
   useEffect(() => {
-    fetchCrypto()
-    const iv = setInterval(fetchCrypto, 60 * 1000)
-    return () => clearInterval(iv)
-  }, [])
+    const controller = new AbortController()
+    fetchCrypto(controller.signal)
+    intervalRef.current = setInterval(() => fetchCrypto(), 60 * 1000)
+    return () => {
+      controller.abort()
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [fetchCrypto])
 
   const formatPrice = (price: number) => {
     if (price >= 1000) return `$${price.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
@@ -54,7 +61,7 @@ export function CryptoWidget() {
         <span className="hud-label text-xs">CRYPTO MARKET</span>
         <div className="flex items-center gap-2">
           {lastUpdated && <span className="hud-label" style={{ fontSize: 8 }}>UPD {lastUpdated}</span>}
-          <button onClick={fetchCrypto} className="text-white/20 hover:text-cyan-400 transition-colors">
+          <button onClick={() => fetchCrypto()} className="text-white/20 hover:text-cyan-400 transition-colors">
             <RefreshCw size={11} />
           </button>
         </div>

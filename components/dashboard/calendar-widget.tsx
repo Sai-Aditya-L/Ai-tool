@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Calendar, Clock, MapPin, Video, ChevronRight, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -38,12 +38,13 @@ export function CalendarWidget() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/calendar/events?days=1&maxResults=20')
+      const res = await fetch('/api/calendar/events?days=1&maxResults=20', { signal })
       if (!res.ok) {
         const data = await res.json()
         setError(data.error || 'Failed to load events')
@@ -75,17 +76,22 @@ export function CalendarWidget() {
 
       setEvents(todayEvents)
       setLastRefresh(new Date())
-    } catch {
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
       setError('Calendar unavailable')
     }
     setLoading(false)
-  }
+  }, [])
 
   useEffect(() => {
-    fetchEvents()
-    const interval = setInterval(fetchEvents, 5 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
+    const controller = new AbortController()
+    fetchEvents(controller.signal)
+    intervalRef.current = setInterval(() => fetchEvents(), 5 * 60 * 1000)
+    return () => {
+      controller.abort()
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [fetchEvents])
 
   const today = new Date()
   const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
@@ -102,7 +108,7 @@ export function CalendarWidget() {
         <div className="flex items-center gap-2">
           <span className="text-white/25 text-xs">{dateLabel}</span>
           <button
-            onClick={fetchEvents}
+            onClick={() => fetchEvents()}
             disabled={loading}
             className="text-white/25 hover:text-cyan-400 transition-colors disabled:opacity-40"
             title="Refresh"
@@ -126,7 +132,7 @@ export function CalendarWidget() {
       ) : error ? (
         <div className="flex flex-col gap-2 py-2">
           <p className="text-white/30 text-xs">{error}</p>
-          <button onClick={fetchEvents} className="text-cyan-400/60 hover:text-cyan-400 text-xs transition-colors self-start">
+          <button onClick={() => fetchEvents()} className="text-cyan-400/60 hover:text-cyan-400 text-xs transition-colors self-start">
             Try again
           </button>
         </div>

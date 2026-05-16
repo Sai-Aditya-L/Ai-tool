@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { anthropic } from '@/lib/anthropic'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
 
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest) {
 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const rl = rateLimit(`files:${user.id}`, 10, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   try {
     const formData = await req.formData()

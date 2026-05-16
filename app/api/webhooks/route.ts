@@ -3,6 +3,26 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
+
+function isPrivateUrl(urlString: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(urlString)
+    if (!['http:', 'https:'].includes(protocol)) return true
+    const privatePatterns = [
+      /^localhost$/i,
+      /^127\./,
+      /^10\./,
+      /^172\.(1[6-9]|2\d|3[01])\./,
+      /^192\.168\./,
+      /^169\.254\./,
+      /^\[?::1\]?$/,
+    ]
+    return privatePatterns.some(p => p.test(hostname))
+  } catch {
+    return true
+  }
+}
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -26,6 +46,9 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  const rl = rateLimit(`webhooks:${user.id}`, 10, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
+
   const { searchParams } = new URL(req.url)
   const testId = searchParams.get('test')
 
@@ -36,6 +59,10 @@ export async function POST(req: NextRequest) {
         where: { id: testId, userId: user.id },
       })
       if (!webhook) return NextResponse.json({ error: 'Webhook not found' }, { status: 404 })
+
+      if (isPrivateUrl(webhook.url)) {
+        return NextResponse.json({ error: 'Invalid webhook URL' }, { status: 400 })
+      }
 
       const payload = {
         event: 'test',
@@ -105,6 +132,9 @@ export async function PATCH(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  const rl = rateLimit(`webhooks-patch:${user.id}`, 10, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
+
   try {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
@@ -134,6 +164,9 @@ export async function DELETE(req: NextRequest) {
 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const rl = rateLimit(`webhooks-delete:${user.id}`, 10, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')

@@ -1,6 +1,21 @@
 import { getToken } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
 
+// Simple IP rate limiter for middleware (Edge-compatible)
+const ipCounts = new Map<string, { count: number; reset: number }>()
+
+function checkIpRateLimit(ip: string, limit = 200, windowMs = 60_000): boolean {
+  const now = Date.now()
+  const entry = ipCounts.get(ip)
+  if (!entry || entry.reset < now) {
+    ipCounts.set(ip, { count: 1, reset: now + windowMs })
+    return true
+  }
+  if (entry.count >= limit) return false
+  entry.count++
+  return true
+}
+
 // Routes that require authentication
 const PROTECTED_PREFIXES = ['/dashboard', '/chat', '/tasks', '/reminders', '/calendar',
   '/notes', '/memory', '/files', '/emails', '/agents', '/automations', '/settings',
@@ -24,6 +39,17 @@ const PROTECTED_API_PREFIXES = ['/api/tasks', '/api/notes', '/api/reminders', '/
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // IP-based rate limiting for all /api/* routes
+  if (pathname.startsWith('/api/')) {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.ip ?? 'unknown'
+    if (!checkIpRateLimit(ip)) {
+      return new NextResponse(JSON.stringify({ error: 'Too many requests' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
+      })
+    }
+  }
 
   // Check if route needs protection
   const needsAuth =

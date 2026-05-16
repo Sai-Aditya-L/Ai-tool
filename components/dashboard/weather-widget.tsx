@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Cloud, Wind, Droplets, Thermometer, RefreshCw } from 'lucide-react'
 
 interface WeatherData {
@@ -32,12 +32,24 @@ export function WeatherWidget() {
   const [city, setCity] = useState('London')
   const [editingCity, setEditingCity] = useState(false)
   const [cityInput, setCityInput] = useState('')
+  const cityRef = useRef(city)
+
+  // Keep cityRef in sync so the polling interval always reads the current city
+  useEffect(() => {
+    cityRef.current = city
+  }, [city])
 
   const fetchWeather = async (cityName: string) => {
     setLoading(true)
     setError('')
     try {
       const res = await fetch(`/api/weather?city=${encodeURIComponent(cityName)}`)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setError(errData.error || 'Weather unavailable')
+        setLoading(false)
+        return
+      }
       const data = await res.json()
       if (data.error) { setError(data.error); setLoading(false); return }
       setWeather(data)
@@ -55,10 +67,12 @@ export function WeatherWidget() {
     const savedCity = typeof window !== 'undefined' ? localStorage.getItem('nexus-weather-city') : null
     const initialCity = savedCity || city
     setCityInput(initialCity)
+    cityRef.current = initialCity
     fetchWeather(initialCity)
-    const interval = setInterval(() => fetchWeather(initialCity), 5 * 60 * 1000)
+    // Poll every 10 minutes; always reads current city from ref to avoid stale closure
+    const interval = setInterval(() => fetchWeather(cityRef.current), 10 * 60 * 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCitySubmit = (e: React.FormEvent) => {
     e.preventDefault()

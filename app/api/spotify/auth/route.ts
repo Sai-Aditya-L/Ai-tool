@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json({ error: 'SPOTIFY_CLIENT_ID not configured' }, { status: 503 })
   }
 
-  const redirectUri = `${process.env.NEXTAUTH_URL}/api/spotify/callback`
+  const redirectUri = `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/api/spotify/callback`
   const scope = 'user-read-currently-playing user-read-playback-state user-modify-playback-state'
   const params = new URLSearchParams({
     response_type: 'code',

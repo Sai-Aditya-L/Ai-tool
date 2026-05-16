@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import { prisma } from './prisma'
+import { createOAuthNonce } from './oauth-nonces'
 
 export function getGoogleOAuthClient() {
   return new google.auth.OAuth2(
@@ -20,11 +21,12 @@ export function getGoogleAuthUrl(userId: string) {
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
   ]
+  const nonce = createOAuthNonce(userId)
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
     prompt: 'consent',
-    state: userId,
+    state: nonce,
   })
 }
 

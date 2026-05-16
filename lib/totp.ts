@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'crypto'
+import { createHmac, randomBytes, createHash } from 'crypto'
 
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
 
@@ -43,10 +43,27 @@ export function generateToken(secret: string): string {
   return generateCode(secret, Math.floor(Date.now() / 30_000))
 }
 
-export function verifyToken(token: string, secret: string): boolean {
+const usedCodes = new Map<string, number>() // key: userId+code hash, value: expiry timestamp
+
+// Cleanup every 2 minutes
+setInterval(() => {
+  const now = Date.now()
+  Array.from(usedCodes.entries()).forEach(([k, exp]) => {
+    if (exp < now) usedCodes.delete(k)
+  })
+}, 2 * 60 * 1000)
+
+export function verifyToken(token: string, secret: string, userId?: string): boolean {
   const counter = Math.floor(Date.now() / 30_000)
   for (const w of [-1, 0, 1]) {
-    if (generateCode(secret, counter + w) === token) return true
+    if (generateCode(secret, counter + w) === token) {
+      if (userId) {
+        const key = createHash('sha256').update(`${userId}:${token}`).digest('hex')
+        if (usedCodes.has(key)) return false
+        usedCodes.set(key, Date.now() + 90_000)
+      }
+      return true
+    }
   }
   return false
 }

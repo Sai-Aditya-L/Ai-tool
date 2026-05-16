@@ -1,27 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGoogleOAuthClient } from '@/lib/google'
 import { prisma } from '@/lib/prisma'
+import { oauthNonces } from '@/lib/oauth-nonces'
 
 export async function GET(req: NextRequest) {
+  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
-  const state = searchParams.get('state') // userId
+  const state = searchParams.get('state') // nonce
   const error = searchParams.get('error')
 
   if (error) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=google_denied`)
+    return NextResponse.redirect(`${baseUrl}/integrations?error=google_denied`)
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=invalid_callback`)
+    return NextResponse.redirect(`${baseUrl}/integrations?error=invalid_callback`)
   }
+
+  const nonceData = oauthNonces.get(state)
+  if (!nonceData || nonceData.expiresAt < Date.now()) {
+    return NextResponse.redirect(`${baseUrl}/integrations?error=invalid_callback`)
+  }
+  const userId = nonceData.userId
+  oauthNonces.delete(state)
 
   try {
     const oauth2Client = getGoogleOAuthClient()
     const { tokens } = await oauth2Client.getToken(code)
 
     if (!tokens.access_token) {
-      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=no_token`)
+      return NextResponse.redirect(`${baseUrl}/integrations?error=no_token`)
     }
 
     // Get user info
@@ -32,7 +41,7 @@ export async function GET(req: NextRequest) {
 
     // Save integration
     await prisma.integration.upsert({
-      where: { userId_provider: { userId: state, provider: 'google' } },
+      where: { userId_provider: { userId, provider: 'google' } },
       update: {
         status: 'connected',
         accessToken: tokens.access_token,
@@ -47,7 +56,7 @@ export async function GET(req: NextRequest) {
         }),
       },
       create: {
-        userId: state,
+        userId,
         provider: 'google',
         status: 'connected',
         accessToken: tokens.access_token,
@@ -65,16 +74,16 @@ export async function GET(req: NextRequest) {
 
     await prisma.activityLog.create({
       data: {
-        userId: state,
+        userId,
         action: 'INTEGRATION_CONNECTED',
         entityType: 'integration',
         details: `Connected Google account: ${userInfo.data.email}`,
       },
     })
 
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?success=google_connected`)
+    return NextResponse.redirect(`${baseUrl}/integrations?success=google_connected`)
   } catch (err) {
     console.error('Google OAuth callback error:', err)
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=oauth_failed`)
+    return NextResponse.redirect(`${baseUrl}/integrations?error=oauth_failed`)
   }
 }

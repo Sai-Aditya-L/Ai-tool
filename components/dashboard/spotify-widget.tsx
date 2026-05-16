@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Play, Pause, SkipForward, Music, ExternalLink } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -25,23 +25,31 @@ export function SpotifyWidget() {
   const [data, setData] = useState<NowPlayingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [controlling, setControlling] = useState(false)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const fetchNowPlaying = useCallback(async () => {
+  const fetchNowPlaying = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/spotify/now-playing')
+      const res = await fetch('/api/spotify/now-playing', { signal })
       const json = await res.json()
       setData(json)
-    } catch {
-      // silently fail
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+      // silently fail for other errors
     }
     setLoading(false)
   }, [])
 
   useEffect(() => {
-    fetchNowPlaying()
-    const interval = setInterval(fetchNowPlaying, 10_000)
-    return () => clearInterval(interval)
-  }, [fetchNowPlaying])
+    const controller = new AbortController()
+
+    fetchNowPlaying(controller.signal)
+    intervalRef.current = setInterval(() => fetchNowPlaying(), 30_000)
+
+    return () => {
+      controller.abort()
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, []) // fetchNowPlaying is stable (empty deps useCallback), fine to omit here
 
   const control = async (action: string) => {
     if (controlling) return

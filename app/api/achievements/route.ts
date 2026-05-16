@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   const taskCount = await prisma.task.count({ where: { userId: user.id } })
   if (taskCount >= 1) await tryAward('first_task', 'Task Master', 'Create your first task', '✅')
 
-  const completedTaskCount = await prisma.task.count({ where: { userId: user.id, status: 'done' } })
+  const completedTaskCount = await prisma.task.count({ where: { userId: user.id, status: 'completed' } })
   if (completedTaskCount >= 50) await tryAward('tasks_50', 'Productivity Pro', 'Complete 50 tasks', '🚀')
 
   // Focus sessions

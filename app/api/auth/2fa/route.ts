@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { generateSecret, keyuri, verifyToken } from '@/lib/totp'
+import { encrypt, decrypt } from '@/lib/encryption'
 import QRCode from 'qrcode'
 
 export async function GET(req: NextRequest) {
@@ -48,24 +49,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing secret or token' }, { status: 400 })
     }
 
-    if (!verifyToken(token, secret)) {
+    if (!verifyToken(token, secret, user.id)) {
       return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })
     }
 
-    // TODO: encrypt with AES-256 before storing
-    const encoded = Buffer.from(secret).toString('base64')
+    const encoded = encrypt(secret)
 
     try {
       await prisma.userPreferences.upsert({
         where: { userId: user.id },
         create: {
           userId: user.id,
-          // @ts-ignore — twoFactorSecret/twoFactorEnabled may be added by migration
           twoFactorSecret: encoded,
           twoFactorEnabled: true,
         },
         update: {
-          // @ts-ignore — twoFactorSecret/twoFactorEnabled may be added by migration
           twoFactorSecret: encoded,
           twoFactorEnabled: true,
         },
@@ -108,8 +106,8 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: '2FA is not enabled' }, { status: 400 })
     }
 
-    const secret = Buffer.from(stored, 'base64').toString()
-    if (!verifyToken(token, secret)) {
+    const secret = (() => { try { return decrypt(stored) } catch { return Buffer.from(stored, 'base64').toString() } })()
+    if (!verifyToken(token, secret, user.id)) {
       return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })
     }
 
@@ -117,7 +115,6 @@ export async function DELETE(req: NextRequest) {
       await prisma.userPreferences.update({
         where: { userId: user.id },
         data: {
-          // @ts-ignore — twoFactorSecret/twoFactorEnabled may be added by migration
           twoFactorSecret: null,
           twoFactorEnabled: false,
         },

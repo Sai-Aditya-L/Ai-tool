@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       <h2 style="color: #fff; margin: 0 0 16px;">${subject}</h2>
       <div style="color: rgba(255,255,255,0.7); line-height: 1.6;">${content || ''}</div>
       <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: rgba(255,255,255,0.3);">
-        This email was sent from your NEXUS system. <a href="${process.env.NEXTAUTH_URL}/settings" style="color: #00e5ff;">Manage notifications</a>
+        This email was sent from your NEXUS system. <a href="${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/settings" style="color: #00e5ff;">Manage notifications</a>
       </div>
     </div>
   `

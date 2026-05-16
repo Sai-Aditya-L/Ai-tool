@@ -132,7 +132,7 @@ export function CommandPalette() {
     { label: 'Deploy Agent', description: 'Launch an AI agent', icon: 'Bot', action: () => router.push('/agents') },
     { label: 'Run Simulation', description: 'Predict and plan', icon: 'Gauge', action: () => router.push('/simulate') },
     { label: 'Analyze Image', description: 'Upload image for analysis', icon: 'Eye', action: () => router.push('/visual') },
-    { label: 'Export Data', description: 'Download your data', icon: 'Download', action: () => window.open('/api/export', '_blank') },
+    { label: 'Export Data', description: 'Download your data', icon: 'Download', action: () => window.open('/api/export?format=json', '_blank') },
   ]
 
   const filteredNavItems = NAV_ITEMS.filter((item) => {
@@ -234,7 +234,7 @@ export function CommandPalette() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4"
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[5vh] sm:pt-[15vh] px-4"
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           onClick={() => {
             setOpen(false)
@@ -300,11 +300,6 @@ export function CommandPalette() {
                         <div className="flex-1 min-w-0">
                           <span className="text-white/90 text-sm">{item.label}</span>
                         </div>
-                        {item.shortcut && (
-                          <kbd className="text-white/30 text-xs font-mono bg-white/5 px-1.5 py-0.5 rounded">
-                            {item.shortcut}
-                          </kbd>
-                        )}
                       </motion.button>
                     )
                   })}

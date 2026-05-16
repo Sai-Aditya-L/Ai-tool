@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 async function getAuthUser(req?: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -40,6 +41,9 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const rl = rateLimit(`snippets:${user.id}`, 20, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
+
   const body = await req.json()
   const { title, language = 'text', code, tags = '[]' } = body
 
@@ -69,6 +73,9 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = rateLimit(`snippets-patch:${user.id}`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   const body = await req.json()
   const { id, title, language, code, tags, pinned } = body
@@ -105,6 +112,9 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = rateLimit(`snippets-delete:${user.id}`, 20, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')

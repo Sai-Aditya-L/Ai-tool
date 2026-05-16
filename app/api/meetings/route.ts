@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 const createMeetingSchema = z.object({
   title: z.string().min(1).max(200),
@@ -47,6 +48,9 @@ export async function POST(req: NextRequest) {
 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const rl = rateLimit(`meetings:${user.id}`, 20, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   try {
     const body = await req.json()

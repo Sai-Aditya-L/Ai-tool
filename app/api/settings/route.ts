@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 const patchSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -53,6 +54,9 @@ export async function PATCH(req: NextRequest) {
     include: { preferences: true },
   })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const rl = rateLimit(`settings:${user.id}`, 10, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   try {
     const body = await req.json()

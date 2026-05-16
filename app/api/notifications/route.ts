@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -31,6 +32,9 @@ export async function PATCH(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  const rl = rateLimit(`notifications-patch:${user.id}`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
+
   const { ids, readAll } = await req.json()
 
   if (readAll) {
@@ -52,6 +56,9 @@ export async function DELETE(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  const rl = rateLimit(`notifications-delete:${user.id}`, 20, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
+
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id query parameter' }, { status: 400 })
@@ -70,6 +77,9 @@ export async function POST(req: NextRequest) {
 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const rl = rateLimit(`notifications-post:${user.id}`, 30, 60_000)
+  if (!rl.allowed) return rateLimitResponse()
 
   const { title, body, type, link } = await req.json()
 

@@ -134,21 +134,32 @@ export default function AchievementsPage() {
     fetchAchievements()
   }, [fetchAchievements])
 
+  const [scanError, setScanError] = useState('')
+
   async function handleScan() {
     setScanning(true)
+    setScanError('')
     try {
       const res = await fetch('/api/achievements?check=1', { method: 'POST' })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        throw new Error(errJson.error || `Server error ${res.status}`)
+      }
       const json = await res.json()
-      const newCount: number = json.newCount ?? json.newAchievements ?? 0
+      // API returns { newlyEarned: Achievement[] }
+      const newCount: number = Array.isArray(json.newlyEarned)
+        ? json.newlyEarned.length
+        : (json.newCount ?? 0)
       if (newCount > 0) {
         toast.success(`${newCount} new achievement${newCount !== 1 ? 's' : ''} earned!`, { icon: '🏆' })
       } else {
         toast('All up to date', { icon: '✓' })
       }
       await fetchAchievements()
-    } catch {
-      toast.error('Scan failed')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Scan failed'
+      setScanError(msg)
+      toast.error(msg)
     } finally {
       setScanning(false)
     }
@@ -191,6 +202,20 @@ export default function AchievementsPage() {
                 {scanning ? 'Scanning…' : 'SCAN FOR NEW ACHIEVEMENTS'}
               </button>
             </div>
+
+            {/* Scan error */}
+            {scanError && (
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-red-400/10 border border-red-400/20 text-red-400 text-xs">
+                <span className="flex-1">{scanError}</span>
+                <button
+                  onClick={handleScan}
+                  disabled={scanning}
+                  className="underline underline-offset-2 hover:text-red-300 transition-colors disabled:opacity-50"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
             {/* Progress bar */}
             <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">

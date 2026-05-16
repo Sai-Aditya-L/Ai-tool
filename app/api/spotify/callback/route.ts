@@ -6,9 +6,10 @@ import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/login`)
+    return NextResponse.redirect(`${baseUrl}/login`)
   }
 
   const { searchParams } = new URL(req.url)
@@ -16,12 +17,12 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
 
   if (error || !code) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/media?error=spotify_denied`)
+    return NextResponse.redirect(`${baseUrl}/media?error=spotify_denied`)
   }
 
   const clientId = process.env.SPOTIFY_CLIENT_ID!
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET!
-  const redirectUri = `${process.env.NEXTAUTH_URL}/api/spotify/callback`
+  const redirectUri = `${baseUrl}/api/spotify/callback`
 
   const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
   const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
@@ -35,11 +36,11 @@ export async function GET(req: NextRequest) {
 
   const tokens = await tokenRes.json()
   if (!tokens.access_token) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/media?error=token_exchange`)
+    return NextResponse.redirect(`${baseUrl}/media?error=token_exchange`)
   }
 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
-  if (!user) return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/media?error=user_not_found`)
+  if (!user) return NextResponse.redirect(`${baseUrl}/media?error=user_not_found`)
 
   await prisma.integration.upsert({
     where: { userId_provider: { userId: user.id, provider: 'spotify' } },
@@ -61,5 +62,5 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/media?connected=true`)
+  return NextResponse.redirect(`${baseUrl}/media?connected=true`)
 }

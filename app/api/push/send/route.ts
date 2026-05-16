@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = JSON.stringify({ title, body, url: url || '/dashboard', tag: tag || 'nexus-notification' })
+  const expiredIds: string[] = []
+
   const results = await Promise.allSettled(
     subscriptions.map(async (sub) => {
       try {
@@ -47,17 +49,20 @@ export async function POST(req: NextRequest) {
         )
         return { id: sub.id, success: true }
       } catch (err: any) {
-        // 410 Gone — subscription expired, remove it
         if (err.statusCode === 410) {
-          await prisma.pushSubscription.delete({ where: { id: sub.id } })
+          expiredIds.push(sub.id)
         }
-        throw err
+        return { id: sub.id, success: false }
       }
     })
   )
 
-  const sent = results.filter(r => r.status === 'fulfilled').length
-  const failed = results.filter(r => r.status === 'rejected').length
+  if (expiredIds.length > 0) {
+    await prisma.pushSubscription.deleteMany({ where: { id: { in: expiredIds } } })
+  }
+
+  const sent = results.filter(r => r.status === 'fulfilled' && (r.value as any).success).length
+  const failed = results.filter(r => r.status === 'fulfilled' && !(r.value as any).success).length
 
   return NextResponse.json({ success: true, sent, failed })
 }

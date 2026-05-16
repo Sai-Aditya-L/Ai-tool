@@ -473,6 +473,7 @@ export default function OnboardingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [checkingDone, setCheckingDone] = useState(true)
   const [skippedTask, setSkippedTask] = useState(false)
+  const [stepError, setStepError] = useState('')
 
   const [form, setForm] = useState<FormState>({
     displayName: '',
@@ -527,8 +528,9 @@ export default function OnboardingPage() {
         toast.error('Please enter your name')
         return
       }
+      setStepError('')
       try {
-        await fetch('/api/settings', {
+        const res = await fetch('/api/settings', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -537,8 +539,13 @@ export default function OnboardingPage() {
             timezone: form.timezone,
           }),
         })
+        if (!res.ok) {
+          setStepError('Failed to save preferences. Please try again.')
+          return // Don't advance to next step
+        }
       } catch {
-        // Non-blocking
+        setStepError('Failed to save preferences. Please try again.')
+        return
       }
       setStep(2)
     } else if (step === 2) {
@@ -548,7 +555,7 @@ export default function OnboardingPage() {
       // First Task → Done — create task if provided
       if (!skippedTask && form.taskTitle.trim()) {
         try {
-          await fetch('/api/tasks', {
+          const res = await fetch('/api/tasks', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -556,8 +563,13 @@ export default function OnboardingPage() {
               priority: form.taskPriority,
             }),
           })
+          if (!res.ok) {
+            // Non-blocking: show toast but still advance
+            toast.error('Could not create task — you can add it from the Tasks page.')
+          }
         } catch {
-          // Non-blocking
+          // Non-blocking: show toast but still advance
+          toast.error('Could not create task — you can add it from the Tasks page.')
         }
       }
       setStep(4)
@@ -665,12 +677,19 @@ export default function OnboardingPage() {
           )}
         </div>
 
+        {/* Step error */}
+        {stepError && (
+          <div className="mt-4 px-4 py-2.5 rounded-xl bg-red-400/10 border border-red-400/20 text-red-400 text-xs">
+            {stepError}
+          </div>
+        )}
+
         {/* Navigation */}
         <div className="flex gap-3 mt-8" style={{ justifyContent: step > 0 ? 'space-between' : 'flex-end' }}>
           {step > 0 && (
             <button
               type="button"
-              onClick={() => setStep(s => s - 1)}
+              onClick={() => { setStep(s => s - 1); setStepError('') }}
               disabled={submitting}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-white/10 text-white/40 text-sm hover:text-white/70 hover:border-white/20 transition-all disabled:opacity-30"
             >

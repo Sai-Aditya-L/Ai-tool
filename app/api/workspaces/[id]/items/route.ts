@@ -55,6 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const itemsWithDetails = await Promise.all(
     items.map(async (item) => {
+      if (item.addedById !== user.id) return { ...item, entityDetails: null }
       const entityDetails = await fetchEntityDetails(item.entityType, item.entityId, user.id)
       return { ...item, entityDetails }
     })
