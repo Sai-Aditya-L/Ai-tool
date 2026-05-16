@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '@/components/layout/header'
-import { BarChart2, Target, Zap, BookOpen, Clock, Flame, Trophy, TrendingUp, RefreshCw, Brain } from 'lucide-react'
+import { BarChart2, Target, Zap, BookOpen, Clock, Flame, Trophy, TrendingUp, RefreshCw, Brain, AlertTriangle, Lightbulb, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ProductivityData {
@@ -24,6 +24,22 @@ interface WeeklyReview {
   }
   generatedAt: string
   cached: boolean
+}
+
+interface AIInsights {
+  bestFocusDay: string
+  bestTaskDay: string
+  bestHour: string
+  taskTrend: number
+  focusTrend: number
+  overdueTasks: number
+  habitConsistency: number
+  totalFocusMins28d: number
+  totalTasksDone28d: number
+  patterns: string[]
+  recommendations: string[]
+  riskFlag: string | null
+  momentum: 'positive' | 'neutral' | 'negative'
 }
 
 function ScoreRing({ score, size = 120 }: { score: number; size?: number }) {
@@ -64,8 +80,10 @@ function StatCard({ icon: Icon, label, value, sub, color }: { icon: any; label: 
 export default function AnalyticsPage() {
   const [productivity, setProductivity] = useState<ProductivityData | null>(null)
   const [weeklyReview, setWeeklyReview] = useState<WeeklyReview | null>(null)
+  const [insights, setInsights] = useState<AIInsights | null>(null)
   const [loadingProd, setLoadingProd] = useState(true)
   const [loadingReview, setLoadingReview] = useState(true)
+  const [loadingInsights, setLoadingInsights] = useState(true)
   const [reviewError, setReviewError] = useState('')
 
   const loadProductivity = useCallback(async () => {
@@ -90,10 +108,23 @@ export default function AnalyticsPage() {
     setLoadingReview(false)
   }, [])
 
+  const loadInsights = useCallback(async () => {
+    setLoadingInsights(true)
+    try {
+      const res = await fetch('/api/analytics/insights')
+      if (res.ok) {
+        const data = await res.json()
+        setInsights(data.insights)
+      }
+    } catch {}
+    setLoadingInsights(false)
+  }, [])
+
   useEffect(() => {
     loadProductivity()
     loadWeeklyReview()
-  }, [loadProductivity, loadWeeklyReview])
+    loadInsights()
+  }, [loadProductivity, loadWeeklyReview, loadInsights])
 
   const maxDayScore = Math.max(...(productivity?.dailyScores.map(d => d.score) ?? [1]), 1)
 
@@ -190,6 +221,103 @@ export default function AnalyticsPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* AI Pattern Intelligence */}
+          <div className="hud-stat-card rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Brain size={16} className="text-violet-400" />
+                <p className="hud-label text-xs">PATTERN INTELLIGENCE</p>
+                <span className="text-[10px] text-violet-400/50 bg-violet-400/10 px-1.5 py-0.5 rounded nexus-mono">28-day analysis</span>
+              </div>
+              <button onClick={loadInsights} className="text-white/30 hover:text-violet-400 transition-colors">
+                <RefreshCw size={14} className={loadingInsights ? 'animate-spin' : ''} />
+              </button>
+            </div>
+
+            {loadingInsights ? (
+              <div className="space-y-2">
+                {[1,2,3].map(i => <div key={i} className="h-4 bg-white/5 rounded animate-pulse" style={{ width: `${60 + i * 15}%` }} />)}
+              </div>
+            ) : insights ? (
+              <div className="space-y-4">
+                {/* Momentum + Quick Stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="hud-panel rounded-lg p-3 border border-white/5 text-center">
+                    <p className={cn('font-bold text-lg', insights.momentum === 'positive' ? 'text-green-400' : insights.momentum === 'negative' ? 'text-red-400' : 'text-white/60')}>
+                      {insights.momentum === 'positive' ? '↑' : insights.momentum === 'negative' ? '↓' : '→'}
+                    </p>
+                    <p className="text-white/40 text-xs capitalize">{insights.momentum}</p>
+                  </div>
+                  <div className="hud-panel rounded-lg p-3 border border-white/5 text-center">
+                    <p className="font-bold text-lg text-cyan-400">{insights.bestFocusDay}</p>
+                    <p className="text-white/40 text-xs">Peak Focus Day</p>
+                  </div>
+                  <div className="hud-panel rounded-lg p-3 border border-white/5 text-center">
+                    <p className="font-bold text-lg text-amber-400">{insights.bestHour}</p>
+                    <p className="text-white/40 text-xs">Peak Hour</p>
+                  </div>
+                  <div className="hud-panel rounded-lg p-3 border border-white/5 text-center">
+                    <p className="font-bold text-lg text-orange-400">{insights.habitConsistency}%</p>
+                    <p className="text-white/40 text-xs">Habit Consistency</p>
+                  </div>
+                </div>
+
+                {/* Trend pills */}
+                <div className="flex flex-wrap gap-2">
+                  <span className={cn('text-xs px-2.5 py-1 rounded-full border nexus-mono', insights.taskTrend >= 0 ? 'border-green-400/30 text-green-400 bg-green-400/5' : 'border-red-400/30 text-red-400 bg-red-400/5')}>
+                    Tasks {insights.taskTrend >= 0 ? '+' : ''}{insights.taskTrend}% WoW
+                  </span>
+                  <span className={cn('text-xs px-2.5 py-1 rounded-full border nexus-mono', insights.focusTrend >= 0 ? 'border-cyan-400/30 text-cyan-400 bg-cyan-400/5' : 'border-red-400/30 text-red-400 bg-red-400/5')}>
+                    Focus {insights.focusTrend >= 0 ? '+' : ''}{insights.focusTrend}% WoW
+                  </span>
+                  <span className="text-xs px-2.5 py-1 rounded-full border border-white/10 text-white/50 nexus-mono">
+                    {Math.round(insights.totalFocusMins28d / 60 * 10) / 10}h focus · {insights.totalTasksDone28d} tasks (28d)
+                  </span>
+                </div>
+
+                {/* Risk flag */}
+                {insights.riskFlag && (
+                  <div className="flex items-start gap-2 bg-red-400/5 border border-red-400/20 rounded-lg px-3 py-2.5">
+                    <AlertTriangle size={13} className="text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-300/80 text-xs">{insights.riskFlag}</p>
+                  </div>
+                )}
+
+                {/* Patterns */}
+                {insights.patterns?.length > 0 && (
+                  <div>
+                    <p className="text-white/30 text-xs uppercase tracking-wider mb-2">Detected Patterns</p>
+                    <div className="space-y-1.5">
+                      {insights.patterns.map((p, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <Brain size={11} className="text-violet-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-white/65 text-xs">{p}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recommendations */}
+                {insights.recommendations?.length > 0 && (
+                  <div>
+                    <p className="text-white/30 text-xs uppercase tracking-wider mb-2">NEXUS Recommendations</p>
+                    <div className="space-y-1.5">
+                      {insights.recommendations.map((r, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <Lightbulb size={11} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-white/65 text-xs">{r}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-white/30 text-sm">No pattern data yet — use NEXUS for a few weeks to unlock insights.</p>
+            )}
           </div>
 
           {/* Weekly AI Review */}

@@ -180,52 +180,34 @@ export function NexusVoiceButton() {
         return
       }
 
-      // Collect the full SSE stream as text
-      const reader = res.body?.getReader()
-      if (!reader) {
-        showError('NEXUS unavailable')
-        return
-      }
-
+      // Parse as JSON — the chat API returns JSON responses
       let fullText = ''
-      const decoder = new TextDecoder()
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        // Parse SSE lines
-        const lines = chunk.split('\n')
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') continue
-            try {
-              const parsed = JSON.parse(data)
-              // Handle both streaming delta and full message formats
-              const delta =
-                parsed?.delta?.text ||
-                parsed?.choices?.[0]?.delta?.content ||
-                parsed?.text ||
-                parsed?.content ||
-                ''
-              if (delta) fullText += delta
-            } catch {
-              // Not JSON — might be raw text chunk
-              if (data && data !== '[DONE]') fullText += data
+      const contentType = res.headers.get('content-type') || ''
+      if (contentType.includes('application/json')) {
+        const json = await res.json()
+        fullText = json.message || json.content || json.text || ''
+      } else {
+        // SSE / streaming fallback
+        const reader = res.body?.getReader()
+        if (reader) {
+          const decoder = new TextDecoder()
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            const chunk = decoder.decode(value, { stream: true })
+            for (const line of chunk.split('\n')) {
+              if (!line.startsWith('data: ')) continue
+              const data = line.slice(6)
+              if (data === '[DONE]') continue
+              try {
+                const parsed = JSON.parse(data)
+                const delta = parsed?.delta?.text || parsed?.choices?.[0]?.delta?.content || parsed?.text || parsed?.content || ''
+                if (delta) fullText += delta
+              } catch {
+                if (data) fullText += data
+              }
             }
           }
-        }
-      }
-
-      // Fallback: if no SSE format detected, try parsing as JSON
-      if (!fullText) {
-        try {
-          const cloned = res.clone()
-          const json = await cloned.json()
-          fullText = json.message || json.content || json.text || ''
-        } catch {
-          // ignore
         }
       }
 
