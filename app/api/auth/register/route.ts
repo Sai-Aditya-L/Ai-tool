@@ -20,7 +20,10 @@ export async function POST(req: NextRequest) {
 
     const existingUser = await prisma.user.findUnique({ where: { email } })
     if (existingUser) {
-      return NextResponse.json({ error: 'Email already registered' }, { status: 409 })
+      // Don't reveal whether the email exists — return a generic success-like message
+      return NextResponse.json({
+        message: 'If this email is new, your account has been created.',
+      }, { status: 200 })
     }
 
     const hashedPassword = await bcrypt.hash(password, 12)

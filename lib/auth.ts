@@ -32,13 +32,15 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
         })
 
-        if (!user || !user.password) {
-          throw new Error('No account found with this email')
-        }
+        // Always run bcrypt compare to prevent timing-based account enumeration.
+        // If no user (or no password hash), compare against a dummy hash so the
+        // response time is indistinguishable from a real failed login.
+        const isValid = user?.password
+          ? await bcrypt.compare(credentials.password, user.password)
+          : await bcrypt.compare(credentials.password, '$2a$12$dummyhashtopreventtimingXXXXXXXXXXXXXXXXXXXX')
 
-        const isValid = await bcrypt.compare(credentials.password, user.password)
-        if (!isValid) {
-          throw new Error('Invalid password')
+        if (!user || !user.password || !isValid) {
+          throw new Error('Invalid email or password')
         }
 
         return {

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 const WMO_CODES: Record<number, string> = {
   0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
@@ -10,6 +12,11 @@ const WMO_CODES: Record<number, string> = {
 }
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const city = req.nextUrl.searchParams.get('city')
   const countryCode = req.nextUrl.searchParams.get('country_code')
   if (!city) return NextResponse.json({ error: 'Missing city' }, { status: 400 })

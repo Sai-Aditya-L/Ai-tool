@@ -1,19 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { oauthNonces } from '@/lib/oauth-nonces'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
-  const state = searchParams.get('state') // user email
+  const state = searchParams.get('state') // CSRF nonce
   const error = searchParams.get('error')
 
   if (error) {
     return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=github_denied`)
   }
 
-  if (!code || !state) {
+  if (!code) {
     return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=invalid_callback`)
   }
+
+  // Validate the CSRF nonce
+  if (!state) {
+    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=missing_state`)
+  }
+
+  const nonceData = oauthNonces.get(state)
+  if (!nonceData || nonceData.expiresAt < Date.now()) {
+    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=invalid_state`)
+  }
+  // Delete immediately — nonces are single-use
+  oauthNonces.delete(state)
 
   try {
     // Exchange code for access token
@@ -49,8 +62,8 @@ export async function GET(req: NextRequest) {
     })
     const githubUser = await userRes.json()
 
-    // Find our user by email (state = email)
-    const user = await prisma.user.findUnique({ where: { email: state } })
+    // Look up our user by ID from the validated nonce data
+    const user = await prisma.user.findUnique({ where: { id: nonceData.userId } })
     if (!user) {
       return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/integrations?error=user_not_found`)
     }

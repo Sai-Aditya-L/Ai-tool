@@ -1,4 +1,6 @@
 import { NextRequest } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import os from 'os'
 
 export const dynamic = 'force-dynamic'
@@ -34,6 +36,11 @@ function getStats() {
 }
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+  }
+
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     start(controller) {

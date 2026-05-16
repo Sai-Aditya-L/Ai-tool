@@ -21,6 +21,15 @@ interface PendingAction {
 
 export const pendingActions = new Map<string, PendingAction>()
 
+// Clean up actions older than 15 minutes
+function cleanupPendingActions() {
+  const cutoff = new Date(Date.now() - 15 * 60 * 1000)
+  for (const [id, action] of pendingActions.entries()) {
+    if (action.createdAt < cutoff) pendingActions.delete(id)
+  }
+}
+setInterval(cleanupPendingActions, 60 * 1000)
+
 // ─── Actions Requiring Approval ───────────────────────────────────────────────
 
 const APPROVAL_REQUIRED_ACTIONS = new Set(['form_fill', 'run_script', 'delete_file', 'write_file'])
@@ -53,13 +62,21 @@ function validateUrl(url: string): { valid: boolean; reason?: string } {
 
     const hostname = parsed.hostname.toLowerCase()
 
-    // Block localhost on sensitive ports
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
-      const port = parseInt(parsed.port || (parsed.protocol === 'https:' ? '443' : '80'))
-      const blockedPorts = [3000, 3001, 5000, 5432, 6379, 8080, 8443, 9000, 22, 21, 25, 587]
-      if (blockedPorts.includes(port)) {
-        return { valid: false, reason: `Localhost port ${port} is blocked for security reasons` }
-      }
+    // Block IPv6 link-local and loopback
+    if (hostname.includes('::') && (hostname === '[::1]' || hostname === '[::]' || hostname.startsWith('[fe80'))) {
+      return { valid: false, reason: 'IPv6 loopback/link-local addresses are not allowed' }
+    }
+
+    // Block ALL localhost/loopback addresses (any port)
+    const localhostPatterns = [
+      /^localhost$/i,
+      /^127\.\d+\.\d+\.\d+$/,
+      /^\[?::1\]?$/,
+      /^\[?0+\]?:.*:0*1$/,  // IPv6 loopback variants
+      /^0\.0\.0\.0$/,
+    ]
+    if (localhostPatterns.some(p => p.test(hostname))) {
+      return { valid: false, reason: 'Localhost/loopback addresses are not allowed' }
     }
 
     // Block private IP ranges
@@ -465,6 +482,11 @@ export async function POST(req: NextRequest) {
     const { description } = await (async () => {
       return { description: observeAction(action, params) }
     })()
+    // Enforce per-user limit of 10 pending actions
+    const userPendingCount = Array.from(pendingActions.values()).filter(a => a.userId === user.id).length
+    if (userPendingCount >= 10) {
+      return NextResponse.json({ error: 'Too many pending actions. Approve or reject existing ones first.' }, { status: 429 })
+    }
     const actionId = randomUUID()
     pendingActions.set(actionId, {
       action,
@@ -488,6 +510,11 @@ export async function POST(req: NextRequest) {
   if (mode === 'assisted') {
     if (isSensitive) {
       const description = observeAction(action, params)
+      // Enforce per-user limit of 10 pending actions
+      const userPendingCount = Array.from(pendingActions.values()).filter(a => a.userId === user.id).length
+      if (userPendingCount >= 10) {
+        return NextResponse.json({ error: 'Too many pending actions. Approve or reject existing ones first.' }, { status: 429 })
+      }
       const actionId = randomUUID()
       pendingActions.set(actionId, {
         action,
