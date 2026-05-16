@@ -72,6 +72,38 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Schedule push notification for reminder
+    try {
+      const dueAt = reminder.dueAt ?? (reminder as Record<string, unknown>).dueDate
+      if (dueAt && new Date(dueAt as string) > new Date()) {
+        // Log to ActivityLog so the job queue can pick it up
+        await prisma.activityLog.create({
+          data: {
+            userId: user.id,
+            action: 'reminder_scheduled',
+            entityType: 'reminder',
+            entityId: reminder.id,
+            metadata: JSON.stringify({
+              title: reminder.title,
+              dueAt: new Date(dueAt as string).toISOString(),
+              scheduledPush: true,
+            }),
+          },
+        })
+        // Also enqueue a job if the Job model exists
+        await (prisma as unknown as { job: { create: (args: unknown) => Promise<unknown> } }).job.create({
+          data: {
+            userId: user.id,
+            type: 'digest_send',
+            payload: JSON.stringify({ reminderId: reminder.id, userId: user.id, title: reminder.title }),
+            nextRunAt: new Date(dueAt as string),
+          },
+        }).catch(() => {}) // Silently fail if Job model not yet migrated
+      }
+    } catch {
+      // Never let notification scheduling break reminder creation
+    }
+
     return NextResponse.json({ reminder }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {

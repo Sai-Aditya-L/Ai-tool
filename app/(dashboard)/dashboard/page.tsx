@@ -97,6 +97,8 @@ export default function DashboardPage() {
   const [dashData, setDashData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
+  useEffect(() => { document.title = 'Dashboard | NEXUS' }, [])
+
   useEffect(() => {
     async function loadDashboard() {
       try {
