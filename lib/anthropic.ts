@@ -501,4 +501,45 @@ export const NEXUS_TOOLS: Anthropic.Tool[] = [
       required: ['coins'],
     },
   },
+  {
+    name: 'get_productivity_score',
+    description: 'Get the user\'s current productivity score, focus streak, and breakdown for today. Use when user asks about their performance, productivity, or how they\'re doing today.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_habits_status',
+    description: 'Get the user\'s active habits and today\'s completion status. Use when user asks about habits, streaks, or daily routines.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_goals',
+    description: 'Get the user\'s active goals with progress percentages. Use when user asks about goals, objectives, or long-term plans.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        status: { type: 'string', enum: ['active', 'completed', 'paused'], description: 'Filter goals by status (default: active)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'start_focus_session',
+    description: 'Start a focus/pomodoro timer session for the user. Use when user wants to focus, do deep work, or start a pomodoro.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        duration_minutes: { type: 'number', description: 'Focus duration in minutes (default: 25 for pomodoro)' },
+        task_name: { type: 'string', description: 'What the user is focusing on' },
+      },
+      required: [],
+    },
+  },
 ]

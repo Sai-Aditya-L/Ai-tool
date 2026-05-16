@@ -589,6 +589,58 @@ async function executeToolCall(
         }
       }
 
+      case 'get_productivity_score': {
+        const now3 = new Date()
+        const todayS = new Date(now3.getFullYear(), now3.getMonth(), now3.getDate())
+        const [tasksToday, focusToday, habitsToday, allHabits, focusStreak] = await Promise.all([
+          prisma.task.count({ where: { userId, status: 'completed', completedAt: { gte: todayS } } }),
+          prisma.focusSession.aggregate({ where: { userId, completed: true, createdAt: { gte: todayS } }, _sum: { actualMins: true }, _count: true }),
+          prisma.habitEntry.count({ where: { userId, createdAt: { gte: todayS } } }),
+          prisma.habit.count({ where: { userId, status: 'active' } }),
+          prisma.focusSession.findMany({ where: { userId, completed: true }, orderBy: { createdAt: 'desc' }, take: 30, select: { createdAt: true } }),
+        ])
+        const taskScore = Math.min(40, tasksToday * 10)
+        const focusSessions = focusToday._count ?? 0
+        const focusScore = Math.min(25, focusSessions * 8)
+        const habitScore = allHabits > 0 ? Math.round((habitsToday / allHabits) * 25) : 0
+        const score = Math.min(100, taskScore + focusScore + habitScore)
+        const seenDays = new Set(focusStreak.map(s => s.createdAt.toISOString().split('T')[0]))
+        let streak = 0; const checkD = new Date(todayS)
+        while (seenDays.has(checkD.toISOString().split('T')[0])) { streak++; checkD.setDate(checkD.getDate() - 1) }
+        return JSON.stringify({ score, breakdown: { tasks: taskScore, focus: focusScore, habits: habitScore }, today: { tasksCompleted: tasksToday, focusSessions, focusMinutes: focusToday._sum?.actualMins ?? 0, habitsLogged: habitsToday, habitsTotal: allHabits }, streak })
+      }
+
+      case 'get_habits_status': {
+        const todayS2 = new Date(); todayS2.setHours(0, 0, 0, 0)
+        const [habits, todayEntries] = await Promise.all([
+          prisma.habit.findMany({ where: { userId, status: 'active' }, orderBy: { createdAt: 'asc' } }),
+          prisma.habitEntry.findMany({ where: { userId, createdAt: { gte: todayS2 } }, select: { habitId: true } }),
+        ])
+        const completedIds = new Set(todayEntries.map(e => e.habitId))
+        const habitsWithStatus = habits.map(h => ({ id: h.id, title: h.title, frequency: h.frequency, completedToday: completedIds.has(h.id) }))
+        const completedCount = habitsWithStatus.filter(h => h.completedToday).length
+        return JSON.stringify({ habits: habitsWithStatus, summary: `${completedCount}/${habits.length} habits completed today` })
+      }
+
+      case 'get_goals': {
+        const status = (toolInput.status as string) || 'active'
+        const goals = await prisma.goal.findMany({
+          where: { userId, status },
+          orderBy: [{ priority: 'asc' }, { updatedAt: 'desc' }],
+          take: 10,
+          select: { id: true, title: true, description: true, progress: true, targetDate: true, category: true, priority: true, status: true },
+        })
+        return JSON.stringify({ goals, count: goals.length })
+      }
+
+      case 'start_focus_session': {
+        const duration = Math.max(1, Math.min(120, (toolInput.duration_minutes as number) || 25))
+        const session2 = await prisma.focusSession.create({
+          data: { userId, plannedMins: duration, actualMins: 0, completed: false, taskTitle: (toolInput.task_name as string) || undefined },
+        })
+        return JSON.stringify({ success: true, sessionId: session2.id, duration, message: `Focus session started! ${duration} minute${duration !== 1 ? 's' : ''} of deep work${toolInput.task_name ? ` on "${toolInput.task_name}"` : ''}. Head to the Focus Timer page to track it.` })
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` })
     }
@@ -695,7 +747,43 @@ export async function POST(req: NextRequest) {
       ? `\n\nKnown user context from memory:\n${memories.map(m => `- ${m.category}/${m.key}: ${m.value}`).join('\n')}`
       : ''
 
-    const systemPrompt = getSystemPrompt(prefs?.personalityMode ?? undefined) + memoryContext + `\n\nCurrent user: ${user.name || user.email}\nCurrent time: ${new Date().toISOString()}`
+    // Inject live daily context so NEXUS is proactively aware
+    const now2 = new Date()
+    const todayStart2 = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate())
+    const todayEnd2 = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate(), 23, 59, 59, 999)
+    const [dailyTasks, dailyEvents, dailyHabits] = await Promise.all([
+      prisma.task.findMany({
+        where: { userId: user.id, status: { in: ['pending', 'in_progress'] }, dueDate: { lte: todayEnd2 } },
+        orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }],
+        take: 8,
+        select: { title: true, priority: true, dueDate: true, status: true },
+      }),
+      prisma.calendarEvent.findMany({
+        where: { userId: user.id, startTime: { gte: todayStart2, lte: todayEnd2 } },
+        orderBy: { startTime: 'asc' },
+        take: 5,
+        select: { title: true, startTime: true, endTime: true, location: true },
+      }),
+      prisma.habit.findMany({
+        where: { userId: user.id, status: 'active' },
+        take: 5,
+        select: { title: true, frequency: true },
+      }),
+    ])
+
+    const overdueTasks2 = dailyTasks.filter(t => t.dueDate && t.dueDate < todayStart2)
+    const todayTasks2 = dailyTasks.filter(t => !t.dueDate || (t.dueDate >= todayStart2 && t.dueDate <= todayEnd2))
+
+    const dailyContext = [
+      overdueTasks2.length > 0 ? `OVERDUE tasks (${overdueTasks2.length}): ${overdueTasks2.map(t => `"${t.title}" [${t.priority}]`).join(', ')}` : null,
+      todayTasks2.length > 0 ? `Tasks due today (${todayTasks2.length}): ${todayTasks2.map(t => `"${t.title}" [${t.priority}]`).join(', ')}` : null,
+      dailyEvents.length > 0 ? `Today's calendar events: ${dailyEvents.map(e => `"${e.title}" at ${new Date(e.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}${e.location ? ` (${e.location})` : ''}`).join(', ')}` : null,
+      dailyHabits.length > 0 ? `Active habits to track: ${dailyHabits.map(h => h.title).join(', ')}` : null,
+    ].filter(Boolean).join('\n')
+
+    const systemPrompt = getSystemPrompt(prefs?.personalityMode ?? undefined) + memoryContext
+      + (dailyContext ? `\n\nUser's live daily context:\n${dailyContext}` : '')
+      + `\n\nCurrent user: ${user.name || user.email}\nCurrent time: ${new Date().toISOString()}`
 
     const provider = (prefs?.aiProvider || 'anthropic') as AIProvider
     const model = provider === 'openai'

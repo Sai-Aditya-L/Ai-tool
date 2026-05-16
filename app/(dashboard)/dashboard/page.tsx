@@ -10,6 +10,7 @@ import { NewsWidget } from '@/components/dashboard/news-widget'
 import { CryptoWidget } from '@/components/dashboard/crypto-widget'
 import { CalendarWidget } from '@/components/dashboard/calendar-widget'
 import Link from 'next/link'
+import { Sparkles, BarChart2, Loader2, RotateCcw, Flame } from 'lucide-react'
 
 interface DashboardStats {
   pendingTasks: number
@@ -169,6 +170,45 @@ export default function DashboardPage() {
   const stats = dashData?.stats
   const data = dashData?.data
 
+  // --- AI Briefing state ---
+  const [briefing, setBriefing] = useState<string | null>(null)
+  const [briefingLoading, setBriefingLoading] = useState(true)
+  const [generatingBriefing, setGeneratingBriefing] = useState(false)
+  const [productivityScore, setProductivityScore] = useState<{ score: number; streak: number } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/daily-summaries')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const today = new Date().toISOString().split('T')[0]
+        const todaySummary = data?.summaries?.find((s: { date: string }) => s.date === today)
+        setBriefing(todaySummary?.content ?? null)
+      })
+      .catch(() => {})
+      .finally(() => setBriefingLoading(false))
+
+    fetch('/api/analytics/productivity')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setProductivityScore({ score: d.score, streak: d.streak }))
+      .catch(() => {})
+  }, [])
+
+  async function generateBriefing() {
+    setGeneratingBriefing(true)
+    try {
+      const res = await fetch('/api/daily-summaries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'daily' }),
+      })
+      if (res.ok) {
+        const d = await res.json()
+        setBriefing(d.summary?.content ?? null)
+      }
+    } catch {}
+    setGeneratingBriefing(false)
+  }
+
   const clientDashData = dashData
     ? {
         stats: {
@@ -306,6 +346,85 @@ export default function DashboardPage() {
             <Link href="/emails" className="text-cyan-400/60 text-xs hover:text-cyan-400 transition-colors">
               View emails →
             </Link>
+          </motion.div>
+
+          {/* Productivity Score */}
+          <motion.div
+            className="hud-stat-card rounded-xl p-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="text-white/40 text-xs uppercase tracking-wider">Today&apos;s Score</div>
+              <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center">
+                <BarChart2 size={14} className="text-cyan-400" />
+              </div>
+            </div>
+            {productivityScore ? (
+              <>
+                <div className="text-3xl font-bold text-white mb-1">{productivityScore.score}<span className="text-sm text-white/30">/100</span></div>
+                <div className="flex items-center gap-1 text-orange-400 text-xs">
+                  <Flame size={11} />
+                  {productivityScore.streak} day streak
+                </div>
+                <div className="mt-2 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all duration-700" style={{ width: `${productivityScore.score}%` }} />
+                </div>
+              </>
+            ) : (
+              <div className="text-3xl font-bold text-white/20">—</div>
+            )}
+          </motion.div>
+
+          {/* AI Morning Briefing */}
+          <motion.div
+            className="col-span-1 md:col-span-2 xl:col-span-3 hud-stat-card rounded-xl p-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.4, ease: 'easeOut' }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-cyan-400" />
+                <span className="text-white/40 text-xs uppercase tracking-wider">NEXUS Morning Briefing</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {briefing && (
+                  <Link href="/daily-summaries" className="text-white/25 hover:text-cyan-400 text-xs transition-colors">View all →</Link>
+                )}
+                <button
+                  onClick={generateBriefing}
+                  disabled={generatingBriefing}
+                  className="text-white/25 hover:text-cyan-400 transition-colors p-1 rounded"
+                  title="Generate briefing"
+                >
+                  {generatingBriefing ? <Loader2 size={12} className="animate-spin text-cyan-400" /> : <RotateCcw size={12} />}
+                </button>
+              </div>
+            </div>
+            {briefingLoading ? (
+              <div className="space-y-2">
+                {[80,65,75].map((w,i) => <div key={i} className="h-2.5 bg-white/5 rounded animate-pulse" style={{ width: `${w}%` }} />)}
+              </div>
+            ) : briefing ? (
+              <p className="text-white/65 text-sm leading-relaxed line-clamp-3">
+                {briefing.replace(/#{1,3} /g, '').replace(/\*\*/g, '').replace(/\n/g, ' ').slice(0, 280)}
+                {briefing.length > 280 && '…'}
+              </p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <p className="text-white/30 text-sm flex-1">No briefing for today yet.</p>
+                <button
+                  onClick={generateBriefing}
+                  disabled={generatingBriefing}
+                  className="text-xs text-cyan-400 border border-cyan-400/30 rounded-lg px-3 py-1.5 hover:bg-cyan-400/10 transition-colors disabled:opacity-40 flex items-center gap-1.5"
+                >
+                  {generatingBriefing ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                  Generate
+                </button>
+              </div>
+            )}
           </motion.div>
 
           {/* Client-side dynamic components */}
