@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         tags: data.tags,
         parentId: data.parentId,
+        isRecurring: body.isRecurring ?? false,
+        recurringSchedule: body.recurringSchedule ?? null,
       },
       include: { subtasks: true },
     })
