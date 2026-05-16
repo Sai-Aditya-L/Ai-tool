@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+
+const createWorkspaceSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  type: z.enum(['personal', 'family', 'work', 'travel', 'household', 'learning', 'custom']).optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{3,8}$/).optional(),
+  emoji: z.string().max(10).optional(),
+  isPublic: z.boolean().optional(),
+})
+
+const updateWorkspaceSchema = createWorkspaceSchema.partial()
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -41,9 +53,13 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
   const body = await req.json()
-  const { name, description, type, color, emoji } = body
 
-  if (!name?.trim()) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+  const parsed = createWorkspaceSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
+  }
+
+  const { name, description, type, color, emoji } = parsed.data
 
   const workspace = await prisma.sharedWorkspace.create({
     data: {
@@ -111,7 +127,13 @@ export async function PATCH(req: NextRequest) {
   if (workspace.ownerId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { name, description, color, emoji, type } = body
+
+  const parsed = updateWorkspaceSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
+  }
+
+  const { name, description, color, emoji, type } = parsed.data
 
   const updated = await prisma.sharedWorkspace.update({
     where: { id },

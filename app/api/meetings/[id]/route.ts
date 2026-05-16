@@ -3,6 +3,18 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { anthropic } from '@/lib/anthropic'
+import { z } from 'zod'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
+
+const updateMeetingSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  date: z.string().optional(),
+  duration: z.number().int().min(1).max(1440).optional(),
+  attendees: z.array(z.string().max(100)).max(100).optional(),
+  notes: z.string().max(50000).optional(),
+  transcript: z.string().max(200000).optional(), // longer limit for transcripts
+  status: z.enum(['scheduled', 'in_progress', 'completed', 'cancelled']).optional(),
+})
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -32,7 +44,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   try {
     const body = await req.json()
-    const { title, date, duration, attendees, notes, status, transcript } = body
+    const parseResult = updateMeetingSchema.safeParse(body)
+    if (!parseResult.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: parseResult.error.flatten() }, { status: 400 })
+    }
+    const { title, date, duration, attendees, notes, status, transcript } = parseResult.data
 
     const updated = await prisma.meeting.update({
       where: { id: params.id },

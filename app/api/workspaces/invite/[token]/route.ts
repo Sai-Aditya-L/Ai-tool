@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@')
+  return local.slice(0, 2) + '***@' + domain
+}
+
 export async function GET(req: NextRequest, { params }: { params: { token: string } }) {
   const member = await prisma.workspaceMember.findUnique({
     where: { inviteToken: params.token },
@@ -21,14 +26,13 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   }
 
   return NextResponse.json({
-    workspace: member.workspace.name,
-    workspaceEmoji: member.workspace.emoji,
+    workspace: { name: member.workspace.name, emoji: member.workspace.emoji, type: member.workspace.type },
     workspaceColor: member.workspace.color,
-    workspaceType: member.workspace.type,
-    invitedBy: member.workspace.owner.name || member.workspace.owner.email,
+    invitedBy: member.workspace.owner.name || maskEmail(member.workspace.owner.email),
     role: member.role,
     status: member.status,
-    email: member.email,
+    email: maskEmail(member.email),
+    expiresAt: member.expiresAt,
   })
 }
 
@@ -50,6 +54,14 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
   if (member.expiresAt && new Date() > member.expiresAt) {
     return NextResponse.json({ error: 'Invite has expired' }, { status: 410 })
+  }
+
+  // Verify the logged-in user's email matches the invite target email
+  if (member.email.toLowerCase() !== user.email.toLowerCase()) {
+    return NextResponse.json(
+      { error: 'This invitation was sent to a different email address.' },
+      { status: 403 }
+    )
   }
 
   const updated = await prisma.workspaceMember.update({
