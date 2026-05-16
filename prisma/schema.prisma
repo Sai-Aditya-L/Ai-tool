@@ -759,3 +759,60 @@ model WorkflowTemplate {
 
   @@index([userId])
 }
+
+model SharedWorkspace {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  description String?
+  type        String   @default("personal") // personal, family, work, travel, household, custom
+  color       String   @default("#00d4ff")
+  emoji       String   @default("🏠")
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members WorkspaceMember[]
+  items   WorkspaceItem[]
+
+  @@index([ownerId])
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String?
+  email       String
+  role        String    @default("viewer") // owner, editor, viewer, guest
+  inviteToken String    @unique @default(cuid())
+  status      String    @default("pending") // pending, active, revoked
+  joinedAt    DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace SharedWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId])
+  @@index([inviteToken])
+  @@index([userId])
+}
+
+model WorkspaceItem {
+  id          String   @id @default(cuid())
+  workspaceId String
+  entityType  String   // task, note, file, goal, reminder, calendarEvent
+  entityId    String
+  addedById   String
+  note        String?
+  createdAt   DateTime @default(now())
+
+  workspace SharedWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  addedBy   User            @relation("WorkspaceItemAdder", fields: [addedById], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, entityType, entityId])
+  @@index([workspaceId])
+  @@index([addedById])
+}
