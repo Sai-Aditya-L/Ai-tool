@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
+import { CommandPalette } from '@/components/ui/command-palette'
 
 export default async function DashboardLayout({
   children,
@@ -48,6 +49,8 @@ export default async function DashboardLayout({
       <main className="flex-1 flex flex-col overflow-hidden relative z-10">
         {children}
       </main>
+
+      <CommandPalette />
     </div>
   )
 }
