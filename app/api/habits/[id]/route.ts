@@ -3,6 +3,30 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { checkAndAwardAchievements } from '@/lib/achievements'
+
+function calcStreak(entries: { date: string; completed: boolean }[]) {
+  const completed = entries.filter(e => e.completed).map(e => e.date).sort().reverse()
+  let current = 0
+  let longest = 0
+  let streak = 0
+  const today = new Date()
+  for (let i = 0; i < 90; i++) {
+    const d = new Date(today)
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().split('T')[0]
+    if (completed.includes(dateStr)) {
+      streak++
+      if (i === 0 || i === 1) current = streak // allow today or yesterday
+    } else {
+      if (i <= 1) current = streak
+      longest = Math.max(longest, streak)
+      streak = 0
+    }
+  }
+  longest = Math.max(longest, streak, current)
+  return { current, longest }
+}
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -113,6 +137,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         where: { habitId_date: { habitId: params.id, date: targetDate } },
         data: { completed: true },
       })
+
+      // Check streak after marking complete
+      const allEntries = await prisma.habitEntry.findMany({
+        where: { habitId: params.id, completed: true },
+        select: { date: true, completed: true },
+        orderBy: { date: 'desc' },
+        take: 90,
+      })
+      const streak = calcStreak(allEntries).current
+      if (streak >= 7) {
+        await prisma.achievement.upsert({
+          where: { userId_type: { userId: user.id, type: 'streak_7' } },
+          create: { userId: user.id, type: 'streak_7', name: 'Week Warrior', desc: '7-day habit streak', icon: '🔥' },
+          update: {},
+        }).catch(() => {})
+      }
+      if (streak >= 30) {
+        await prisma.achievement.upsert({
+          where: { userId_type: { userId: user.id, type: 'streak_30' } },
+          create: { userId: user.id, type: 'streak_30', name: 'Month Master', desc: '30-day habit streak', icon: '💎' },
+          update: {},
+        }).catch(() => {})
+      }
+      checkAndAwardAchievements(user.id).catch(() => {})
+
       return NextResponse.json({ completed: true, date: targetDate, entry: updated })
     } else {
       // Create new entry
@@ -124,6 +173,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           completed: true,
         },
       })
+
+      // Check streak after marking complete
+      const allEntries = await prisma.habitEntry.findMany({
+        where: { habitId: params.id, completed: true },
+        select: { date: true, completed: true },
+        orderBy: { date: 'desc' },
+        take: 90,
+      })
+      const streak = calcStreak(allEntries).current
+      if (streak >= 7) {
+        await prisma.achievement.upsert({
+          where: { userId_type: { userId: user.id, type: 'streak_7' } },
+          create: { userId: user.id, type: 'streak_7', name: 'Week Warrior', desc: '7-day habit streak', icon: '🔥' },
+          update: {},
+        }).catch(() => {})
+      }
+      if (streak >= 30) {
+        await prisma.achievement.upsert({
+          where: { userId_type: { userId: user.id, type: 'streak_30' } },
+          create: { userId: user.id, type: 'streak_30', name: 'Month Master', desc: '30-day habit streak', icon: '💎' },
+          update: {},
+        }).catch(() => {})
+      }
+      checkAndAwardAchievements(user.id).catch(() => {})
+
       return NextResponse.json({ completed: true, date: targetDate, entry })
     }
   } catch (error) {

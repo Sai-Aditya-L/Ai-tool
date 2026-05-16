@@ -1,9 +1,13 @@
 const CACHE_NAME = 'nexus-v2'
-const API_CACHE_NAME = 'nexus-api-v1'
+const STATIC_CACHE = 'nexus-static-v2'
+const API_CACHE = 'nexus-api-v1'
 
-const SHELL_URLS = [
-  '/', '/dashboard', '/chat', '/tasks', '/reminders',
-  '/notes', '/calendar', '/memory', '/files', '/notifications',
+// Static assets to precache
+const PRECACHE_URLS = [
+  '/',
+  '/dashboard',
+  '/offline.html',
+  '/manifest.json',
 ]
 
 // API routes to cache with stale-while-revalidate (read-heavy, low-volatility)
@@ -24,43 +28,41 @@ function isSWRRoute(url) {
   } catch { return false }
 }
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(c => c.addAll(SHELL_URLS))
-      .then(() => self.skipWaiting())
+// Install — precache static assets
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {}))
   )
+  self.skipWaiting()
 })
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(k => k !== CACHE_NAME && k !== API_CACHE_NAME)
-          .map(k => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
+// Activate — clean old caches
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter(k => k !== STATIC_CACHE && k !== API_CACHE && k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
   )
+  self.clients.claim()
 })
 
-self.addEventListener('fetch', (e) => {
-  const { request } = e
-  const url = request.url
+// Fetch strategy
+self.addEventListener('fetch', (event) => {
+  const { request } = event
+  const url = new URL(request.url)
 
-  // Only handle GET requests for caching
-  if (request.method !== 'GET') return
+  // Skip non-GET and cross-origin
+  if (request.method !== 'GET' || url.origin !== location.origin) return
 
   // Stale-while-revalidate for safe API read endpoints
-  if (isSWRRoute(url)) {
-    e.respondWith(
-      caches.open(API_CACHE_NAME).then(async cache => {
+  if (isSWRRoute(url.href)) {
+    event.respondWith(
+      caches.open(API_CACHE).then(async (cache) => {
         const cached = await cache.match(request)
-        const networkFetch = fetch(request).then(res => {
+        const networkFetch = fetch(request).then((res) => {
           if (res.ok) cache.put(request, res.clone())
           return res
-        }).catch(() => cached) // fall back to cache if offline
-
+        }).catch(() => cached)
         // Return cached immediately if available, revalidate in background
         return cached || networkFetch
       })
@@ -68,82 +70,98 @@ self.addEventListener('fetch', (e) => {
     return
   }
 
-  // Network-first for all other API routes (mutations/writes should not be cached)
-  if (url.includes('/api/')) {
-    e.respondWith(
-      fetch(request).catch(() => caches.match(request))
+  // Network-first for other API routes (mutations/writes — cache as fallback only)
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(API_CACHE).then((cache) => cache.put(request, clone))
+          }
+          return response
+        })
+        .catch(() => caches.match(request))
     )
     return
   }
 
   // Cache-first for static assets (JS, CSS, images, fonts)
   if (
-    url.includes('/_next/static/') ||
-    url.includes('/icon-') ||
-    url.includes('.png') || url.includes('.svg') ||
-    url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.includes('/icon-') ||
+    url.pathname.endsWith('.png') || url.pathname.endsWith('.svg') ||
+    url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')
   ) {
-    e.respondWith(
-      caches.match(request).then(cached => cached || fetch(request).then(res => {
-        if (res.ok) {
-          const clone = res.clone()
-          caches.open(CACHE_NAME).then(c => c.put(request, clone))
-        }
-        return res
-      }))
+    event.respondWith(
+      caches.match(request).then((cached) =>
+        cached || fetch(request).then((response) => {
+          if (response.ok) {
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, response.clone()))
+          }
+          return response
+        })
+      )
     )
     return
   }
 
-  // Stale-while-revalidate for app shell pages
-  e.respondWith(
-    caches.open(CACHE_NAME).then(async cache => {
+  // Pages: stale-while-revalidate
+  event.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
       const cached = await cache.match(request)
-      const networkFetch = fetch(request).then(res => {
-        if (res.ok) cache.put(request, res.clone())
-        return res
-      }).catch(() => cached)
-      return cached || networkFetch
+      const fetchPromise = fetch(request).then((response) => {
+        if (response.ok) cache.put(request, response.clone())
+        return response
+      }).catch(() => cached || new Response('Offline', { status: 503 }))
+      return cached || fetchPromise
     })
   )
 })
 
-self.addEventListener('push', (e) => {
-  const data = e.data?.json() || { title: 'NEXUS', body: 'New notification' }
-  e.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
+// Push notifications
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() ?? {}
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'NEXUS', {
+      body: data.body || 'You have a new notification',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      data: { url: data.url || '/dashboard' },
       tag: data.tag || 'nexus-notification',
+      data: { url: data.url || '/dashboard' },
       vibrate: [100, 50, 100],
       actions: data.actions || [],
     })
   )
 })
 
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close()
-  e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-      const url = e.notification.data?.url || '/dashboard'
-      const existing = cs.find(c => c.url.includes(new URL(url, self.location.origin).pathname))
+// Notification click — open the relevant page
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url || '/dashboard'
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      const existing = windowClients.find((c) => c.url.includes(new URL(url, self.location.origin).pathname))
       if (existing && 'focus' in existing) return existing.focus()
       return clients.openWindow(url)
     })
   )
 })
 
-// Background sync for offline writes (basic support)
-self.addEventListener('sync', (e) => {
-  if (e.tag === 'sync-tasks') {
-    e.waitUntil(syncOfflineData('tasks'))
+// Background sync for offline actions
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'nexus-sync') {
+    event.waitUntil(
+      fetch('/api/world-state').catch(() => {})
+    )
+  }
+  if (event.tag === 'sync-tasks') {
+    event.waitUntil(syncOfflineData('tasks'))
   }
 })
 
 async function syncOfflineData(type) {
-  // Placeholder for offline write queue — notify clients to retry
+  // Notify clients to retry pending offline actions
   const cs = await clients.matchAll({ type: 'window' })
   cs.forEach(c => c.postMessage({ type: 'SYNC_COMPLETE', dataType: type }))
 }
