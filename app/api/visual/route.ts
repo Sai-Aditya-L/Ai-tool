@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { anthropic } from '@/lib/anthropic'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   explain:
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
+
+  const rl = rateLimit(`visual:${user.id}`, 10, 60_000) // 10 per minute
+  if (!rl.allowed) return rateLimitResponse()
 
   try {
     const formData = await req.formData()

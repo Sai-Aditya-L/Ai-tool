@@ -15,19 +15,19 @@ async function getWorkspaceAccess(workspaceId: string, userId: string) {
   return { workspace, isOwner, isMember, memberRole: memberRecord?.role || (isOwner ? 'owner' : null) }
 }
 
-async function fetchEntityDetails(entityType: string, entityId: string) {
+async function fetchEntityDetails(entityType: string, entityId: string, userId: string) {
   try {
     switch (entityType) {
       case 'task':
-        return prisma.task.findUnique({ where: { id: entityId }, select: { id: true, title: true, status: true, priority: true } })
+        return prisma.task.findFirst({ where: { id: entityId, userId }, select: { id: true, title: true, status: true, priority: true } })
       case 'note':
-        return prisma.note.findUnique({ where: { id: entityId }, select: { id: true, title: true, content: true } })
+        return prisma.note.findFirst({ where: { id: entityId, userId }, select: { id: true, title: true, content: true } })
       case 'goal':
-        return prisma.goal.findUnique({ where: { id: entityId }, select: { id: true, title: true, status: true, progress: true } })
+        return prisma.goal.findFirst({ where: { id: entityId, userId }, select: { id: true, title: true, status: true, progress: true } })
       case 'reminder':
-        return prisma.reminder.findUnique({ where: { id: entityId }, select: { id: true, title: true, status: true, dueAt: true } })
+        return prisma.reminder.findFirst({ where: { id: entityId, userId }, select: { id: true, title: true, status: true, dueAt: true } })
       case 'calendarEvent':
-        return prisma.calendarEvent.findUnique({ where: { id: entityId }, select: { id: true, title: true, startTime: true, endTime: true } })
+        return prisma.calendarEvent.findFirst({ where: { id: entityId, userId }, select: { id: true, title: true, startTime: true, endTime: true } })
       default:
         return null
     }
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const itemsWithDetails = await Promise.all(
     items.map(async (item) => {
-      const entityDetails = await fetchEntityDetails(item.entityType, item.entityId)
+      const entityDetails = await fetchEntityDetails(item.entityType, item.entityId, user.id)
       return { ...item, entityDetails }
     })
   )
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // Verify entity exists and belongs to this user
-  const entity = await fetchEntityDetails(entityType, entityId)
+  const entity = await fetchEntityDetails(entityType, entityId, user.id)
   if (!entity) return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
 
   const item = await prisma.workspaceItem.create({
@@ -116,6 +116,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const canRemove = isOwner || memberRole === 'owner' || memberRole === 'editor'
   if (!canRemove) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  await prisma.workspaceItem.delete({ where: { id: itemId } })
+  await prisma.workspaceItem.delete({ where: { id: itemId, workspaceId: params.id } })
   return NextResponse.json({ success: true })
 }
