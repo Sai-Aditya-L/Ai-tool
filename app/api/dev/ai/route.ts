@@ -15,6 +15,16 @@ const SYSTEM_PROMPTS: Record<string, string> = {
     'You are Forge, a technical writing expert. Generate comprehensive documentation for the provided code. Include: purpose, parameters/props, return values, examples, and edge cases.',
   architecture_advisor:
     'You are Forge, a senior software architect. Provide structured architectural recommendations including: approach overview, pros and cons, implementation steps, and potential pitfalls. Use ASCII diagrams where helpful.',
+  summarize_repo:
+    'You are Forge, an expert at understanding codebases. Summarize this repository with clear sections: ## Purpose, ## Tech Stack, ## Key Features, ## Architecture Notes, ## Getting Started. Be concise and developer-friendly.',
+  security_review:
+    'You are Sentinel, a security-focused code reviewer. Analyze the provided code for: SQL injection, XSS, authentication flaws, insecure dependencies, secrets in code, input validation issues, and cryptography weaknesses. Structure your response with: ## Critical Issues, ## High Severity, ## Medium Severity, ## Recommendations. Be specific and actionable.',
+  test_generator:
+    'You are Forge, a testing expert. Generate comprehensive tests for the provided code. Include: unit tests, edge cases, and error cases. Use the specified testing framework if provided. Return only well-formatted, runnable test code with clear comments.',
+  explain_stack_trace:
+    'You are Forge, a debugging expert. Explain this error or stack trace in detail. Structure your response with: ## What Went Wrong, ## Root Cause, ## How to Fix, ## Prevention. Be clear, actionable, and concise.',
+  find_todos:
+    'You are Forge, a code quality analyst. Summarize the TODO/FIXME items found in the provided search results. Group them by priority (Critical, High, Medium, Low). Suggest which items should be addressed first and why.',
 }
 
 function buildUserMessage(tool: string, input: Record<string, string>): string {
@@ -40,6 +50,29 @@ function buildUserMessage(tool: string, input: Record<string, string>): string {
     case 'architecture_advisor': {
       const focus = input.focusArea ? `Focus area: ${input.focusArea}\n\n` : ''
       return `${focus}Requirements / Description:\n${input.description}`
+    }
+    case 'summarize_repo': {
+      const topics = input.topics ? `\nTopics: ${input.topics}` : ''
+      const langs = input.languages ? `\nLanguages: ${input.languages}` : ''
+      const desc = input.description ? `\nDescription: ${input.description}` : ''
+      const readme = input.readme ? `\n\nREADME:\n${input.readme}` : ''
+      return `Repository: ${input.repoName}${desc}${langs}${topics}${readme}`
+    }
+    case 'security_review': {
+      const lang = input.language && input.language !== 'auto' ? ` (${input.language})` : ''
+      return `Review the following code for security issues${lang}:\n\n\`\`\`\n${input.code}\n\`\`\``
+    }
+    case 'test_generator': {
+      const lang = input.language && input.language !== 'auto' ? ` (${input.language})` : ''
+      const fw = input.framework ? `\nTesting framework: ${input.framework}` : ''
+      return `Generate tests for the following code${lang}:${fw}\n\n\`\`\`\n${input.code}\n\`\`\``
+    }
+    case 'explain_stack_trace': {
+      const ctx = input.context ? `\n\nContext: ${input.context}` : ''
+      return `Stack trace / Error:\n\`\`\`\n${input.stackTrace}\n\`\`\`${ctx}`
+    }
+    case 'find_todos': {
+      return `Search results containing TODO/FIXME items:\n\n${input.searchResults}`
     }
     default:
       return JSON.stringify(input)
