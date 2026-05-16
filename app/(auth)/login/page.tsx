@@ -11,6 +11,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [totpRequired, setTotpRequired] = useState(false)
+  const [totpCode, setTotpCode] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -20,10 +22,13 @@ export default function LoginPage() {
       const result = await signIn('credentials', {
         email,
         password,
+        totp: totpCode,
         redirect: false,
       })
 
-      if (result?.error) {
+      if (result?.error === 'TOTP_REQUIRED') {
+        setTotpRequired(true)
+      } else if (result?.error) {
         toast.error(result.error)
       } else {
         toast.success('NEXUS online. Welcome back.')
@@ -82,33 +87,65 @@ export default function LoginPage() {
           <h2 className="text-white font-semibold text-lg mb-6">Initialize Session</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">
-                Neural ID (Email)
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className="nexus-input"
-              />
-            </div>
+            {!totpRequired ? (
+              <>
+                <div>
+                  <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">
+                    Neural ID (Email)
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="nexus-input"
+                  />
+                </div>
 
-            <div>
-              <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">
-                Access Key (Password)
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                required
-                className="nexus-input"
-              />
-            </div>
+                <div>
+                  <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">
+                    Access Key (Password)
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    required
+                    className="nexus-input"
+                  />
+                </div>
+              </>
+            ) : (
+              <div>
+                <p className="text-white/60 text-sm mb-4">
+                  Enter the 6-digit code from your authenticator app
+                </p>
+                <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">
+                  Authenticator Code
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="000000"
+                  required
+                  autoFocus
+                  className="nexus-input tracking-widest text-center text-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => { setTotpRequired(false); setTotpCode('') }}
+                  className="mt-3 text-white/40 text-xs hover:text-white/60 transition-colors"
+                >
+                  ← Back to email &amp; password
+                </button>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -120,6 +157,8 @@ export default function LoginPage() {
                   <span className="w-4 h-4 border border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
                   Establishing Link...
                 </span>
+              ) : totpRequired ? (
+                'VERIFY & LOGIN'
               ) : (
                 'Initialize Neural Link'
               )}

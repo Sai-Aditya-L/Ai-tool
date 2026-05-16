@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
+import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Sun, Moon } from 'lucide-react'
 import { Sidebar } from '@/components/layout/sidebar'
@@ -13,12 +15,33 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const { data: session } = useSession()
+  const pathname = usePathname()
+  const router = useRouter()
 
   useEffect(() => {
     const saved = (localStorage.getItem('nexus-theme') as 'dark' | 'light') || 'dark'
     setTheme(saved)
     document.documentElement.setAttribute('data-theme', saved)
   }, [])
+
+  useEffect(() => {
+    if (!session?.user) return
+    if (pathname === '/onboarding') return
+    const done = localStorage.getItem('nexus_onboarding_done')
+    if (!done) {
+      fetch('/api/onboarding')
+        .then(r => r.json())
+        .then(data => {
+          if (data.completed === false) {
+            router.push('/onboarding')
+          } else {
+            localStorage.setItem('nexus_onboarding_done', '1')
+          }
+        })
+        .catch(() => {})
+    }
+  }, [session, pathname])
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'

@@ -77,6 +77,12 @@ export default function SettingsPage() {
   })
   const [savingNotifs, setSavingNotifs] = useState(false)
 
+  // Password change
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
+
   // Privacy
   const [clearingMemory, setClearingMemory] = useState(false)
   const [exportingData, setExportingData] = useState(false)
@@ -124,6 +130,35 @@ export default function SettingsPage() {
       toast.error('Failed to save profile')
     } finally {
       setSavingProfile(false)
+    }
+  }
+
+  async function changePassword() {
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match')
+      return
+    }
+    if (newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters')
+      return
+    }
+    setSavingPassword(true)
+    try {
+      const res = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      toast.success('Password changed successfully')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to change password')
+    } finally {
+      setSavingPassword(false)
     }
   }
 
@@ -330,6 +365,58 @@ export default function SettingsPage() {
                     )}
                     {savingProfile ? 'Saving…' : 'Save Changes'}
                   </button>
+
+                  {/* Change Password */}
+                  <div className="pt-4 border-t border-white/5">
+                    <h3 className="text-white/70 text-sm font-medium flex items-center gap-2 mb-3">
+                      <Shield size={14} className="text-cyan-400" /> Change Password
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Current Password</label>
+                        <input
+                          type="password"
+                          value={currentPassword}
+                          onChange={e => setCurrentPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="nexus-input"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">New Password</label>
+                        <input
+                          type="password"
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="nexus-input"
+                        />
+                        <p className="text-white/30 text-xs mt-1">Minimum 8 characters</p>
+                      </div>
+                      <div>
+                        <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Confirm New Password</label>
+                        <input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="nexus-input"
+                        />
+                      </div>
+                      <button
+                        onClick={changePassword}
+                        disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
+                        className="nexus-btn-primary flex items-center gap-2 text-sm disabled:opacity-60"
+                      >
+                        {savingPassword ? (
+                          <span className="w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <Key size={14} />
+                        )}
+                        {savingPassword ? 'Changing…' : 'Change Password'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

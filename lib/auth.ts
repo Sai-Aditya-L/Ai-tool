@@ -22,6 +22,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
+        totp: { label: 'Authenticator Code', type: 'text', placeholder: '000000' },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -41,6 +42,21 @@ export const authOptions: NextAuthOptions = {
 
         if (!user || !user.password || !isValid) {
           throw new Error('Invalid email or password')
+        }
+
+        // Check 2FA
+        const prefs = await prisma.userPreferences.findUnique({ where: { userId: user.id } })
+        if (prefs?.twoFactorEnabled && prefs.twoFactorSecret) {
+          const totp = (credentials as any).totp as string | undefined
+          if (!totp) {
+            throw new Error('TOTP_REQUIRED')
+          }
+          const { authenticator } = await import('otplib')
+          const secret = Buffer.from(prefs.twoFactorSecret, 'base64').toString()
+          const valid = authenticator.verify({ token: totp, secret })
+          if (!valid) {
+            throw new Error('Invalid authenticator code')
+          }
         }
 
         return {
