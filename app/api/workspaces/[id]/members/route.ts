@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { randomBytes } from 'crypto'
 
 async function getWorkspaceAccess(workspaceId: string, userId: string) {
   const workspace = await prisma.sharedWorkspace.findUnique({
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Find user by email if they exist
   const invitedUser = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } })
 
+  const inviteToken = randomBytes(32).toString('hex')
   const member = await prisma.workspaceMember.create({
     data: {
       workspaceId: params.id,
@@ -68,6 +70,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       email: email.toLowerCase().trim(),
       role,
       status: 'pending',
+      inviteToken,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
   })
 
@@ -109,7 +113,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!validRoles.includes(role)) return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
 
   const updated = await prisma.workspaceMember.update({
-    where: { id: memberId },
+    where: { id: memberId, workspaceId: params.id },
     data: { role },
   })
 
@@ -138,6 +142,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!isOwner && !isSelf) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (member.role === 'owner' && !isSelf) return NextResponse.json({ error: 'Cannot remove owner' }, { status: 400 })
 
-  await prisma.workspaceMember.delete({ where: { id: memberId } })
+  await prisma.workspaceMember.delete({ where: { id: memberId, workspaceId: params.id } })
   return NextResponse.json({ success: true })
 }

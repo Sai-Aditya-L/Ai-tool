@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { anthropic } from '@/lib/anthropic'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 // ---------------------------------------------------------------------------
 // Role-specific system prompts (mirrored from /api/agents/[id]/runs/route.ts)
@@ -254,6 +255,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
+
+  const rl = rateLimit(`orchestrate:${user.id}`, 5, 60_000) // 5 per minute per user
+  if (!rl.allowed) return rateLimitResponse()
 
   let body: { query?: string; userId?: string }
   try {
