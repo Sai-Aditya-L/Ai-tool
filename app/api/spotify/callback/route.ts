@@ -20,8 +20,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${baseUrl}/media?error=spotify_denied`)
   }
 
-  const clientId = process.env.SPOTIFY_CLIENT_ID!
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET!
+  const clientId = process.env.SPOTIFY_CLIENT_ID
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
+  if (!clientId || !clientSecret) {
+    return NextResponse.redirect(`${baseUrl}/media?error=spotify_not_configured`)
+  }
   const redirectUri = `${baseUrl}/api/spotify/callback`
 
   const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')

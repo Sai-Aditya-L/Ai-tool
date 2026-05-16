@@ -152,7 +152,11 @@ Respond with only valid JSON, no markdown.`,
         // Try to extract JSON from the response
         const match = text.match(/\{[\s\S]*\}/)
         if (match) {
-          parsed = JSON.parse(match[0])
+          try {
+            parsed = JSON.parse(match[0])
+          } catch {
+            return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 })
+          }
         } else {
           return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 })
         }
