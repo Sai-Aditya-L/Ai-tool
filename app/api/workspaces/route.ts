@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     .filter((m) => m.workspace.ownerId !== user.id)
     .map((m) => ({ ...m.workspace, isOwner: false, memberRole: m.role }))
 
-  return NextResponse.json({ workspaces: [...ownedWithFlag, ...memberWithFlag] })
+  return NextResponse.json({ workspaces: [...ownedWithFlag, ...memberWithFlag], currentUserId: user.id })
 }
 
 export async function POST(req: NextRequest) {
