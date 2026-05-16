@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 
 export default function DashboardError({
   error,
@@ -10,35 +10,21 @@ export default function DashboardError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
-  useEffect(() => {
-    console.error('[NEXUS Dashboard Error]', error)
-  }, [error])
+  useEffect(() => { console.error(error) }, [error])
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 p-8 text-center">
-      <div className="w-16 h-16 rounded-full bg-red-400/10 border border-red-400/20 flex items-center justify-center">
-        <AlertTriangle size={28} className="text-red-400" />
-      </div>
-      <div>
-        <h2 className="text-white font-semibold text-lg mb-2">Something went wrong</h2>
-        <p className="text-white/40 text-sm max-w-sm mx-auto">
-          {error.message || 'An unexpected error occurred in this section.'}
-        </p>
-        {error.digest && (
-          <p className="text-white/20 text-xs mt-2 font-mono">Error ID: {error.digest}</p>
-        )}
-      </div>
-      <div className="flex gap-3">
-        <button
-          onClick={reset}
-          className="nexus-btn-primary flex items-center gap-2 text-sm"
-        >
-          <RefreshCw size={14} /> Try again
-        </button>
-        <a href="/dashboard" className="nexus-btn-secondary flex items-center gap-2 text-sm">
-          <Home size={14} /> Dashboard
-        </a>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
+      <AlertTriangle size={40} className="text-red-400 mb-4" />
+      <h2 className="text-white/90 text-lg font-semibold mb-2">Page Error</h2>
+      <p className="text-white/40 text-sm mb-6 max-w-sm">
+        {error.message || 'This page encountered an error. Your data is safe.'}
+      </p>
+      <button
+        onClick={reset}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/10 transition-colors"
+      >
+        <RefreshCw size={14} /> Try Again
+      </button>
     </div>
   )
 }

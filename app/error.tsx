@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
 
 export default function GlobalError({
   error,
@@ -10,64 +12,38 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error('[NEXUS Global Error]', error)
+    console.error('Global error:', error)
   }, [error])
 
   return (
-    <html lang="en">
-      <body
-        style={{
-          background: '#050510',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          flexDirection: 'column',
-          gap: '16px',
-          fontFamily: "'Space Grotesk', sans-serif",
-          margin: 0,
-        }}
-      >
-        <div
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: '50%',
-            border: '1px solid rgba(248,113,113,0.3)',
-            background: 'rgba(248,113,113,0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 28,
-          }}
-        >
-          ⚠
+    <html>
+      <body style={{ background: '#000810', margin: 0 }}>
+        <div className="min-h-screen flex items-center justify-center p-8" style={{ background: '#000810' }}>
+          <div className="text-center max-w-md">
+            <div className="text-red-400 text-6xl font-mono font-bold mb-4">ERR</div>
+            <div className="text-red-400/60 text-xs font-mono tracking-widest uppercase mb-8">
+              SYSTEM FAULT // NEXUS CORE EXCEPTION
+            </div>
+            <h1 className="text-white/90 text-xl font-semibold mb-2">Something went wrong</h1>
+            <p className="text-white/40 text-sm mb-8">
+              {error.message || 'An unexpected error occurred in the NEXUS system.'}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={reset}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/10 transition-colors"
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white/70 border border-white/10 hover:bg-white/5 transition-colors"
+              >
+                <Home size={14} /> Dashboard
+              </Link>
+            </div>
+          </div>
         </div>
-        <h2 style={{ fontSize: 20, margin: 0, fontWeight: 600 }}>NEXUS — Critical Error</h2>
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, margin: 0, maxWidth: 360, textAlign: 'center' }}>
-          {error.message || 'A critical error occurred. Please try again.'}
-        </p>
-        {error.digest && (
-          <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11, fontFamily: 'monospace', margin: 0 }}>
-            Error ID: {error.digest}
-          </p>
-        )}
-        <button
-          onClick={reset}
-          style={{
-            padding: '10px 24px',
-            border: '1px solid rgba(0,212,255,0.4)',
-            background: 'rgba(0,212,255,0.1)',
-            color: '#00d4ff',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: 14,
-            fontFamily: 'inherit',
-          }}
-        >
-          Try again
-        </button>
       </body>
     </html>
   )
