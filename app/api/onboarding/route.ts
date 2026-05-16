@@ -5,14 +5,33 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const onboardingSchema = z.object({
-  preferredName: z.string().min(1).max(100),
+  preferredName: z.string().min(1).max(100).optional(),
   workRole: z.string().max(200).optional(),
   timezone: z.string().max(100).default('UTC'),
   currentMode: z.string().max(50).default('personal'),
   notificationsOn: z.boolean().default(true),
   voiceEnabled: z.boolean().default(true),
   memoryEnabled: z.boolean().default(true),
+  completed: z.boolean().optional(),
 })
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    include: { preferences: true },
+  })
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const userCreatedAt = user.createdAt
+  const isNewUser = Date.now() - new Date(userCreatedAt).getTime() < 24 * 60 * 60 * 1000
+  const taskCount = await prisma.task.count({ where: { userId: user.id } })
+  const completed = !isNewUser || taskCount > 0
+
+  return NextResponse.json({ completed })
+}
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -24,6 +43,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const data = onboardingSchema.parse(body)
+
+    // If this is a completion marker, just acknowledge
+    if (data.completed) {
+      return NextResponse.json({ success: true })
+    }
 
     // Upsert user preferences
     await prisma.userPreferences.upsert({
@@ -52,10 +76,10 @@ export async function POST(req: NextRequest) {
     })
 
     // Create initial memory entries
-    const memoriesToUpsert: { category: string; key: string; value: string }[] = [
-      { category: 'profile', key: 'preferred_name', value: data.preferredName },
-    ]
-
+    const memoriesToUpsert: { category: string; key: string; value: string }[] = []
+    if (data.preferredName) {
+      memoriesToUpsert.push({ category: 'profile', key: 'preferred_name', value: data.preferredName })
+    }
     if (data.workRole) {
       memoriesToUpsert.push({ category: 'profile', key: 'work_role', value: data.workRole })
     }
@@ -83,7 +107,7 @@ export async function POST(req: NextRequest) {
         action: 'ONBOARDING_COMPLETED',
         entityType: 'user',
         entityId: user.id,
-        details: `Onboarding completed for ${data.preferredName}`,
+        details: `Onboarding completed for ${data.preferredName ?? 'user'}`,
       },
     })
 

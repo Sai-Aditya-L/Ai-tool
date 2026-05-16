@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { anthropic, NEXUS_SYSTEM_PROMPT, NEXUS_TOOLS } from '@/lib/anthropic'
+import { anthropic, NEXUS_SYSTEM_PROMPT, NEXUS_TOOLS, getSystemPrompt } from '@/lib/anthropic'
 import { createMessage, buildToolResultMessages, AIProvider } from '@/lib/ai-provider'
 import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 import {
@@ -702,7 +702,7 @@ export async function POST(req: NextRequest) {
       ? `\n\nKnown user context from memory:\n${memories.map(m => `- ${m.category}/${m.key}: ${m.value}`).join('\n')}`
       : ''
 
-    const systemPrompt = NEXUS_SYSTEM_PROMPT + memoryContext + `\n\nCurrent user: ${user.name || user.email}\nCurrent time: ${new Date().toISOString()}`
+    const systemPrompt = getSystemPrompt(prefs?.personalityMode ?? undefined) + memoryContext + `\n\nCurrent user: ${user.name || user.email}\nCurrent time: ${new Date().toISOString()}`
 
     const provider = (prefs?.aiProvider || 'anthropic') as AIProvider
     const model = provider === 'openai'

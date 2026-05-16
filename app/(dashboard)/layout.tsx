@@ -1,16 +1,37 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { Sun, Moon } from 'lucide-react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { CommandPalette } from '@/components/ui/command-palette'
+import { QuickCapture } from '@/components/ui/quick-capture'
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+
+  useEffect(() => {
+    const saved = (localStorage.getItem('nexus-theme') as 'dark' | 'light') || 'dark'
+    setTheme(saved)
+    document.documentElement.setAttribute('data-theme', saved)
+  }, [])
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    localStorage.setItem('nexus-theme', next)
+    document.documentElement.setAttribute('data-theme', next)
+  }
+
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#000810' }}>
+    <div
+      className={`flex h-screen overflow-hidden${theme === 'light' ? ' light-mode' : ''}`}
+      style={{ background: theme === 'light' ? '#f0f4f8' : '#000810' }}
+    >
       {/* Holographic grid background */}
       <div className="fixed inset-0 hud-grid opacity-100 pointer-events-none" />
 
@@ -55,6 +76,25 @@ export default function DashboardLayout({
       </main>
 
       <CommandPalette />
+
+      {/* Theme toggle — fixed position, top-right */}
+      <button
+        onClick={toggleTheme}
+        title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        className="fixed top-4 right-4 z-40 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+        style={{
+          background: 'rgba(0,229,255,0.08)',
+          border: '1px solid rgba(0,229,255,0.18)',
+        }}
+      >
+        {theme === 'dark' ? (
+          <Sun size={15} className="text-cyan-400/70" />
+        ) : (
+          <Moon size={15} className="text-cyan-400/70" />
+        )}
+      </button>
+
+      <QuickCapture />
     </div>
   )
 }
