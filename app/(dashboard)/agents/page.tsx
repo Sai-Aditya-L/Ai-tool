@@ -58,16 +58,23 @@ interface AgentLog {
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const PRESET_AGENTS = [
-  { name: 'Atlas',    role: 'Travel Agent',        description: 'Plans trips, routes, and itineraries',             avatar: '🌍', color: 'text-blue-400' },
-  { name: 'Chronos',  role: 'Calendar Agent',       description: 'Manages scheduling and time planning',             avatar: '⏱️', color: 'text-cyan-400' },
-  { name: 'Hermes',   role: 'Communication Agent',  description: 'Handles emails and messaging workflows',           avatar: '📡', color: 'text-violet-400' },
-  { name: 'Forge',    role: 'Coding Agent',         description: 'Reviews code, generates docs, debug assistance',   avatar: '⚙️', color: 'text-orange-400' },
-  { name: 'Sentinel', role: 'Security Agent',       description: 'Monitors security and access patterns',            avatar: '🛡️', color: 'text-red-400' },
-  { name: 'Ledger',   role: 'Finance Agent',        description: 'Tracks expenses, bills, and financial goals',      avatar: '💳', color: 'text-green-400' },
-  { name: 'Oracle',   role: 'Research Agent',       description: 'Deep research, synthesis, and analysis',           avatar: '🔮', color: 'text-pink-400' },
-  { name: 'Nimbus',   role: 'Weather Agent',        description: 'Weather briefings and travel planning',            avatar: '🌤️', color: 'text-sky-400' },
-  { name: 'Echo',     role: 'Memory Agent',         description: 'Manages knowledge base and preferences',           avatar: '🧠', color: 'text-yellow-400' },
-  { name: 'Titan',    role: 'Automation Agent',     description: 'Builds and executes workflow automations',         avatar: '⚡', color: 'text-indigo-400' },
+  { name: 'Atlas',         role: 'Travel Agent',        description: 'Plans trips, routes, and itineraries',                                      avatar: '🌍', color: 'text-blue-400' },
+  { name: 'Chronos',       role: 'Calendar Agent',       description: 'Manages scheduling and time planning',                                       avatar: '⏱️', color: 'text-cyan-400' },
+  { name: 'Hermes',        role: 'Communication Agent',  description: 'Handles emails and messaging workflows',                                      avatar: '📡', color: 'text-violet-400' },
+  { name: 'Forge',         role: 'Coding Agent',         description: 'Reviews code, generates docs, debug assistance',                             avatar: '⚙️', color: 'text-orange-400' },
+  { name: 'Sentinel',      role: 'Security Agent',       description: 'Monitors security and access patterns',                                       avatar: '🛡️', color: 'text-red-400' },
+  { name: 'Ledger',        role: 'Finance Agent',        description: 'Tracks expenses, bills, and financial goals',                                 avatar: '💳', color: 'text-green-400' },
+  { name: 'Oracle',        role: 'Research Agent',       description: 'Deep research, synthesis, and analysis',                                      avatar: '🔮', color: 'text-pink-400' },
+  { name: 'Echo',          role: 'Memory Agent',         description: 'Manages knowledge base and preferences',                                      avatar: '🧠', color: 'text-yellow-400' },
+  { name: 'Titan',         role: 'Automation Agent',     description: 'Builds and executes workflow automations',                                    avatar: '⚡', color: 'text-indigo-400' },
+  { name: 'Nova',          role: 'Creative Agent',       description: 'Generates creative content, brainstorms ideas, writes stories and scripts',   avatar: '✨', color: 'text-pink-400' },
+  { name: 'Pulse',         role: 'Health Agent',         description: 'Tracks wellness goals, fitness routines, sleep, and healthy habits',          avatar: '💚', color: 'text-green-400' },
+  { name: 'Cipher',        role: 'Crypto Agent',         description: 'Analyzes encryption, security protocols, and cryptographic systems',           avatar: '🔐', color: 'text-red-400' },
+  { name: 'Scribe',        role: 'Writing Agent',        description: 'Drafts documents, polishes prose, summarizes long-form content',              avatar: '📝', color: 'text-amber-400' },
+  { name: 'Maven',         role: 'Learning Agent',       description: 'Creates study plans, explains concepts, generates quizzes and flashcards',    avatar: '🎓', color: 'text-violet-400' },
+  { name: 'Cartographer',  role: 'Mapping Agent',        description: 'Analyzes locations, plans routes, researches places and geography',           avatar: '🗺️', color: 'text-sky-400' },
+  { name: 'Beacon',        role: 'Notification Agent',   description: 'Manages alerts, prioritizes notifications, and sends smart digests',          avatar: '📡', color: 'text-cyan-400' },
+  { name: 'Nimbus',        role: 'Environment Agent',    description: 'Tracks weather, air quality, climate data, and environmental conditions',     avatar: '🌤️', color: 'text-blue-400' },
 ]
 
 const MODELS = [

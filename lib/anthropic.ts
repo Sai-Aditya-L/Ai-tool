@@ -50,6 +50,26 @@ Key rules:
 5. If you need more information, ask a clarifying question
 6. Be proactive — suggest helpful actions based on context`
 
+/**
+ * Returns the NEXUS system prompt with an optional personality-mode addendum appended.
+ * Pass the user's saved `personalityMode` preference to customise assistant behaviour.
+ */
+export function getSystemPrompt(personality?: string): string {
+  switch (personality) {
+    case 'friendly':
+      return NEXUS_SYSTEM_PROMPT + `\n\nPersonality mode: FRIENDLY — Be warm, conversational, and encouraging. Use a more casual tone. Celebrate wins with the user.`
+    case 'concise':
+      return NEXUS_SYSTEM_PROMPT + `\n\nPersonality mode: CONCISE — Keep all responses ultra-brief. Use bullet points. No fluff, no padding, maximum 3 sentences for explanations.`
+    case 'detailed':
+      return NEXUS_SYSTEM_PROMPT + `\n\nPersonality mode: DETAILED — Provide thorough, comprehensive responses. Include examples, context, and edge cases. Go deep.`
+    case 'socratic':
+      return NEXUS_SYSTEM_PROMPT + `\n\nPersonality mode: SOCRATIC — Guide with questions. Help the user reason to conclusions rather than just giving answers. Teach, don't just tell.`
+    default:
+      // 'professional' and any unknown value — return base prompt unchanged
+      return NEXUS_SYSTEM_PROMPT
+  }
+}
+
 export const NEXUS_TOOLS: Anthropic.Tool[] = [
   {
     name: 'create_task',

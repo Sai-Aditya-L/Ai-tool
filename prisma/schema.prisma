@@ -56,6 +56,7 @@ model User {
   ownedWorkspaces    SharedWorkspace[]  @relation("WorkspaceOwner")
   workspaceMemberships WorkspaceMember[]
   workspaceItems     WorkspaceItem[]   @relation("WorkspaceItemAdder")
+  meetings         Meeting[]
 }
 
 model Account {
@@ -106,6 +107,7 @@ model UserPreferences {
   aiModel         String   @default("claude-sonnet-4-6")
   aiProvider      String   @default("anthropic")
   openaiModel     String   @default("gpt-4o")
+  personalityMode String   @default("professional")
   currentMode     String   @default("personal")
   onboardingDone  Boolean  @default(false)
   workRole        String?
@@ -815,4 +817,24 @@ model WorkspaceItem {
   @@unique([workspaceId, entityType, entityId])
   @@index([workspaceId])
   @@index([addedById])
+}
+
+model Meeting {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  date        DateTime
+  duration    Int?     // minutes
+  attendees   String   @default("[]") // JSON array of strings
+  notes       String?
+  actionItems String   @default("[]") // JSON array
+  summary     String?
+  transcript  String?
+  status      String   @default("scheduled") // scheduled, in_progress, completed, cancelled
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
 }

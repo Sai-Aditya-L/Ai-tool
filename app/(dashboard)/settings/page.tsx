@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { Header } from '@/components/layout/header'
-import { User, Bell, Shield, Cpu, Key, Save, Download, Trash2 } from 'lucide-react'
+import { User, Bell, Shield, Cpu, Key, Save, Download, Trash2, Bot } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ── Toggle component ──────────────────────────────────────────────────────────
@@ -39,6 +39,7 @@ interface Preferences {
   timezone: string
   language: string
   theme: string
+  personalityMode: string
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export default function SettingsPage() {
   const [timezone, setTimezone] = useState('UTC')
   const [language, setLanguage] = useState('en')
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [personalityMode, setPersonalityMode] = useState('professional')
   const [savingAssistant, setSavingAssistant] = useState(false)
 
   // Notifications
@@ -101,6 +103,7 @@ export default function SettingsPage() {
           setTheme(savedTheme)
           if (savedTheme === 'light') document.documentElement.classList.add('light-mode')
           else document.documentElement.classList.remove('light-mode')
+          setPersonalityMode(p.personalityMode ?? 'professional')
         }
       })
       .catch(() => toast.error('Failed to load settings'))
@@ -137,6 +140,7 @@ export default function SettingsPage() {
         timezone,
         language,
         theme,
+        personalityMode,
       }
       const res = await fetch('/api/settings', {
         method: 'PATCH',
@@ -487,6 +491,50 @@ export default function SettingsPage() {
                         <p className="text-white/35 text-xs">Enable push-to-talk voice input</p>
                       </div>
                       <Toggle enabled={voiceEnabled} onChange={setVoiceEnabled} />
+                    </div>
+
+                    {/* AI Personality */}
+                    <div>
+                      <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Bot size={12} className="text-cyan-400/70" />
+                        AI Personality
+                      </label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {[
+                          { value: 'professional', label: 'Professional', desc: 'Precise, formal, efficient. Best for work tasks.' },
+                          { value: 'friendly',     label: 'Friendly',     desc: 'Warm, conversational, encouraging. Best for everyday use.' },
+                          { value: 'concise',      label: 'Concise',      desc: 'Ultra-brief responses, bullet points, no fluff.' },
+                          { value: 'detailed',     label: 'Detailed',     desc: 'Thorough explanations, examples, deep dives.' },
+                          { value: 'socratic',     label: 'Socratic',     desc: 'Questions back, guides reasoning, teaches rather than tells.' },
+                        ].map(mode => (
+                          <button
+                            key={mode.value}
+                            type="button"
+                            onClick={() => setPersonalityMode(mode.value)}
+                            className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
+                              personalityMode === mode.value
+                                ? 'border-cyan-400/40 bg-cyan-400/8 text-white'
+                                : 'border-white/8 text-white/60 hover:border-white/15 hover:bg-white/3'
+                            }`}
+                          >
+                            <span className={`mt-0.5 w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center ${
+                              personalityMode === mode.value
+                                ? 'border-cyan-400 bg-cyan-400'
+                                : 'border-white/30'
+                            }`}>
+                              {personalityMode === mode.value && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-black" />
+                              )}
+                            </span>
+                            <div>
+                              <p className={`text-sm font-medium ${personalityMode === mode.value ? 'text-cyan-400' : 'text-white/70'}`}>
+                                {mode.label}
+                              </p>
+                              <p className="text-white/35 text-xs mt-0.5">{mode.desc}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <button

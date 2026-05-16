@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard,
   MessageSquare,
@@ -222,140 +223,156 @@ export function CommandPalette() {
     setSelectedIndex(0)
   }, [query])
 
-  if (!open) return null
-
   const navOffset = 0
   const actionsOffset = filteredNavItems.length
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
-      onClick={() => {
-        setOpen(false)
-        setQuery('')
-        setSelectedIndex(0)
-      }}
-    >
-      <div
-        className="w-full max-w-xl rounded-2xl overflow-hidden shadow-2xl"
-        style={{
-          background: 'rgba(0,4,12,0.97)',
-          border: '1px solid rgba(0,229,255,0.2)',
-          boxShadow: '0 0 60px rgba(0,229,255,0.1), 0 25px 50px rgba(0,0,0,0.8)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Search Input */}
-        <div className="flex items-center gap-3 px-4 py-3">
-          <Search size={16} className="text-cyan-400 shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search commands, pages, actions..."
-            className="flex-1 bg-transparent text-white text-base outline-none placeholder:text-white/30"
-          />
-        </div>
-
-        {/* Separator */}
-        <div className="h-px bg-white/10" />
-
-        {/* Results */}
-        <div ref={listRef} className="overflow-y-auto max-h-[360px] py-2">
-          {/* Navigate Group */}
-          {filteredNavItems.length > 0 && (
-            <div>
-              <div className="px-4 py-1.5">
-                <span className="text-white/30 text-xs font-medium uppercase tracking-wider">Navigate</span>
-              </div>
-              {filteredNavItems.map((item, idx) => {
-                const Icon = ICON_MAP[item.icon]
-                const isSelected = selectedIndex === navOffset + idx
-                return (
-                  <button
-                    key={item.href}
-                    className={cn(
-                      'flex items-center gap-3 w-full px-4 py-2.5 rounded-lg transition-all text-left',
-                      isSelected ? 'bg-cyan-400/10 border border-cyan-400/20' : 'hover:bg-white/5'
-                    )}
-                    onClick={() => executeItem({ ...item, type: 'nav' })}
-                  >
-                    {Icon && (
-                      <Icon size={15} className={isSelected ? 'text-cyan-400' : 'text-white/40'} />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <span className="text-white/90 text-sm">{item.label}</span>
-                    </div>
-                    {item.shortcut && (
-                      <kbd className="text-white/30 text-xs font-mono bg-white/5 px-1.5 py-0.5 rounded">
-                        {item.shortcut}
-                      </kbd>
-                    )}
-                  </button>
-                )
-              })}
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+          onClick={() => {
+            setOpen(false)
+            setQuery('')
+            setSelectedIndex(0)
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="w-full max-w-xl rounded-2xl overflow-hidden shadow-2xl"
+            style={{
+              background: 'rgba(0,4,12,0.97)',
+              border: '1px solid rgba(0,229,255,0.2)',
+              boxShadow: '0 0 60px rgba(0,229,255,0.1), 0 25px 50px rgba(0,0,0,0.8)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Search Input */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Search size={16} className="text-cyan-400 shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search commands, pages, actions..."
+                className="flex-1 bg-transparent text-white text-base outline-none placeholder:text-white/30"
+              />
             </div>
-          )}
 
-          {/* Quick Actions Group */}
-          {filteredActions.length > 0 && (
-            <div className={filteredNavItems.length > 0 ? 'mt-2' : ''}>
-              <div className="px-4 py-1.5">
-                <span className="text-white/30 text-xs font-medium uppercase tracking-wider">Quick Actions</span>
-              </div>
-              {filteredActions.map((item, idx) => {
-                const Icon = ICON_MAP[item.icon]
-                const isSelected = selectedIndex === actionsOffset + idx
-                return (
-                  <button
-                    key={item.label}
-                    className={cn(
-                      'flex items-center gap-3 w-full px-4 py-2.5 rounded-lg transition-all text-left',
-                      isSelected ? 'bg-cyan-400/10 border border-cyan-400/20' : 'hover:bg-white/5'
-                    )}
-                    onClick={() => executeItem({ ...item, type: 'action' })}
-                  >
-                    {Icon && (
-                      <Icon size={15} className={isSelected ? 'text-cyan-400' : 'text-white/40'} />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <span className="text-white/90 text-sm">{item.label}</span>
-                      {item.description && (
-                        <span className="text-white/40 text-xs ml-2">{item.description}</span>
-                      )}
-                    </div>
-                  </button>
-                )
-              })}
+            {/* Separator */}
+            <div className="h-px bg-white/10" />
+
+            {/* Results */}
+            <div ref={listRef} className="overflow-y-auto max-h-[360px] py-2">
+              {/* Navigate Group */}
+              {filteredNavItems.length > 0 && (
+                <div>
+                  <div className="px-4 py-1.5">
+                    <span className="text-white/30 text-xs font-medium uppercase tracking-wider">Navigate</span>
+                  </div>
+                  {filteredNavItems.map((item, idx) => {
+                    const Icon = ICON_MAP[item.icon]
+                    const isSelected = selectedIndex === navOffset + idx
+                    return (
+                      <motion.button
+                        key={item.href}
+                        initial={{ opacity: 0, x: -4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        className={cn(
+                          'flex items-center gap-3 w-full px-4 py-2.5 rounded-lg transition-all text-left',
+                          isSelected ? 'bg-cyan-400/10 border border-cyan-400/20' : 'hover:bg-white/5'
+                        )}
+                        onClick={() => executeItem({ ...item, type: 'nav' })}
+                      >
+                        {Icon && (
+                          <Icon size={15} className={isSelected ? 'text-cyan-400' : 'text-white/40'} />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className="text-white/90 text-sm">{item.label}</span>
+                        </div>
+                        {item.shortcut && (
+                          <kbd className="text-white/30 text-xs font-mono bg-white/5 px-1.5 py-0.5 rounded">
+                            {item.shortcut}
+                          </kbd>
+                        )}
+                      </motion.button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Quick Actions Group */}
+              {filteredActions.length > 0 && (
+                <div className={filteredNavItems.length > 0 ? 'mt-2' : ''}>
+                  <div className="px-4 py-1.5">
+                    <span className="text-white/30 text-xs font-medium uppercase tracking-wider">Quick Actions</span>
+                  </div>
+                  {filteredActions.map((item, idx) => {
+                    const Icon = ICON_MAP[item.icon]
+                    const isSelected = selectedIndex === actionsOffset + idx
+                    return (
+                      <motion.button
+                        key={item.label}
+                        initial={{ opacity: 0, x: -4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: (actionsOffset + idx) * 0.03 }}
+                        className={cn(
+                          'flex items-center gap-3 w-full px-4 py-2.5 rounded-lg transition-all text-left',
+                          isSelected ? 'bg-cyan-400/10 border border-cyan-400/20' : 'hover:bg-white/5'
+                        )}
+                        onClick={() => executeItem({ ...item, type: 'action' })}
+                      >
+                        {Icon && (
+                          <Icon size={15} className={isSelected ? 'text-cyan-400' : 'text-white/40'} />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className="text-white/90 text-sm">{item.label}</span>
+                          {item.description && (
+                            <span className="text-white/40 text-xs ml-2">{item.description}</span>
+                          )}
+                        </div>
+                      </motion.button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {allItems.length === 0 && (
+                <div className="px-4 py-8 text-center text-white/30 text-sm">
+                  No results for &quot;{query}&quot;
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Empty state */}
-          {allItems.length === 0 && (
-            <div className="px-4 py-8 text-center text-white/30 text-sm">
-              No results for &quot;{query}&quot;
+            {/* Footer */}
+            <div className="flex items-center gap-4 px-4 py-2 border-t border-white/5 text-white/30 text-xs">
+              <span>
+                <kbd className="bg-white/5 px-1 rounded">↑↓</kbd> Navigate
+              </span>
+              <span>
+                <kbd className="bg-white/5 px-1 rounded">↵</kbd> Open
+              </span>
+              <span>
+                <kbd className="bg-white/5 px-1 rounded">Esc</kbd> Close
+              </span>
+              <span className="ml-auto">
+                <kbd className="bg-white/5 px-1 rounded">⌘K</kbd> Toggle
+              </span>
             </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-4 px-4 py-2 border-t border-white/5 text-white/30 text-xs">
-          <span>
-            <kbd className="bg-white/5 px-1 rounded">↑↓</kbd> Navigate
-          </span>
-          <span>
-            <kbd className="bg-white/5 px-1 rounded">↵</kbd> Open
-          </span>
-          <span>
-            <kbd className="bg-white/5 px-1 rounded">Esc</kbd> Close
-          </span>
-          <span className="ml-auto">
-            <kbd className="bg-white/5 px-1 rounded">⌘K</kbd> Toggle
-          </span>
-        </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

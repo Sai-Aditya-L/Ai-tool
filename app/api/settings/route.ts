@@ -16,6 +16,7 @@ const patchSchema = z.object({
   timezone: z.string().max(100).optional(),
   language: z.string().max(10).optional(),
   theme: z.string().max(50).optional(),
+  personalityMode: z.string().max(50).optional(),
 })
 
 export async function GET(req: NextRequest) {
