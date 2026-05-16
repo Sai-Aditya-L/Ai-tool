@@ -53,6 +53,9 @@ model User {
   webhookEndpoints WebhookEndpoint[]
   agentTemplates   AgentTemplate[]
   workflowTemplates WorkflowTemplate[]
+  ownedWorkspaces    SharedWorkspace[]  @relation("WorkspaceOwner")
+  workspaceMemberships WorkspaceMember[]
+  workspaceItems     WorkspaceItem[]   @relation("WorkspaceItemAdder")
 }
 
 model Account {

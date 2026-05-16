@@ -6,15 +6,23 @@
   "display": "standalone",
   "background_color": "#050510",
   "theme_color": "#00d4ff",
-  "orientation": "portrait-primary",
-  "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-  ],
+  "orientation": "any",
+  "lang": "en",
+  "scope": "/",
   "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
   "shortcuts": [
-    { "name": "AI Chat", "url": "/chat", "description": "Open NEXUS chat" },
-    { "name": "Tasks", "url": "/tasks", "description": "View tasks" },
-    { "name": "Voice", "url": "/voice", "description": "Voice commands" }
-  ]
+    { "name": "AI Chat", "short_name": "Chat", "url": "/chat", "description": "Open NEXUS AI Chat", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Tasks", "short_name": "Tasks", "url": "/tasks", "description": "View and manage tasks", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Voice Command", "short_name": "Voice", "url": "/voice", "description": "Voice commands", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Agent Center", "short_name": "Agents", "url": "/agents", "description": "Deploy AI agents", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false,
+  "related_applications": []
 }
