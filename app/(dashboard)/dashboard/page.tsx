@@ -1,6 +1,7 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import { Header } from '@/components/layout/header'
 import { AIOrb } from '@/components/dashboard/ai-orb'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
@@ -10,173 +11,332 @@ import { CryptoWidget } from '@/components/dashboard/crypto-widget'
 import { CalendarWidget } from '@/components/dashboard/calendar-widget'
 import Link from 'next/link'
 
-export const dynamic = 'force-dynamic'
+interface DashboardStats {
+  pendingTasks: number
+  completedTasksToday: number
+  urgentTasks: number
+  todayRemindersCount: number
+  unreadNotifications: number
+  unreadEmailCount: number
+}
 
-export default async function DashboardPage() {
-  const session = await getServerSession(authOptions)
-  const user = await prisma.user.findUnique({
-    where: { email: session!.user!.email! },
-    include: { preferences: true },
-  })
-
-  const now = new Date()
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000)
-
-  const [
-    pendingTasks,
-    completedToday,
-    todayReminders,
-    upcomingReminders,
-    recentActivity,
-    urgentTasks,
-    recentTasks,
-    trackers,
-    unreadNotifications,
-    upcomingFiles,
-    agentRuns,
-    todayEvents,
-    unreadEmailCount,
-  ] = await Promise.all([
-    prisma.task.count({ where: { userId: user!.id, status: { in: ['pending', 'in_progress'] } } }),
-    prisma.task.count({ where: { userId: user!.id, status: 'completed', completedAt: { gte: startOfDay } } }),
-    prisma.reminder.findMany({
-      where: { userId: user!.id, status: 'pending', dueAt: { gte: startOfDay, lte: endOfDay } },
-      orderBy: { dueAt: 'asc' },
-    }),
-    prisma.reminder.findMany({
-      where: { userId: user!.id, status: 'pending', dueAt: { gte: now } },
-      orderBy: { dueAt: 'asc' },
-      take: 5,
-    }),
-    prisma.activityLog.findMany({
-      where: { userId: user!.id },
-      orderBy: { createdAt: 'desc' },
-      take: 8,
-    }),
-    prisma.task.findMany({
-      where: { userId: user!.id, priority: 'urgent', status: { not: 'completed' } },
-      take: 3,
-    }),
-    prisma.task.findMany({
-      where: { userId: user!.id, status: { in: ['pending', 'in_progress'] } },
-      orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }],
-      take: 6,
-    }),
-    prisma.tracker.findMany({
-      where: { userId: user!.id, status: 'active' },
-      orderBy: { dueDate: 'asc' },
-      take: 4,
-    }),
-    prisma.notification.count({ where: { userId: user!.id, read: false } }),
-    prisma.userFile.findMany({ where: { userId: user!.id }, orderBy: { createdAt: 'desc' }, take: 3 }),
-    prisma.agentRun.findMany({ where: { userId: user!.id }, orderBy: { createdAt: 'desc' }, take: 5, include: { agent: true } }),
-    prisma.reminder.findMany({
-      where: { userId: user!.id, status: 'pending', dueAt: { gte: startOfDay, lte: endOfDay } },
-      orderBy: { dueAt: 'asc' },
-      take: 5,
-    }),
-    prisma.emailCache.count({ where: { userId: user!.id, isRead: false } }).catch(() => 0),
-  ])
-
-  const dashData = {
-    stats: { pendingTasks, completedToday, todayRemindersCount: todayReminders.length, unreadNotifications, unreadEmailCount },
-    data: { todayReminders, upcomingReminders, recentActivity, urgentTasks, recentTasks, trackers, recentFiles: upcomingFiles, agentRuns, todayEvents },
+interface DashboardData {
+  stats: DashboardStats
+  data: {
+    todayReminders: unknown[]
+    upcomingReminders: unknown[]
+    recentActivity: unknown[]
+    urgentTasks: unknown[]
+    recentTasks: unknown[]
+    trackers: unknown[]
+    recentFiles: unknown[]
+    agentRuns: unknown[]
+    todayEvents: unknown[]
   }
+  user: { name?: string | null }
+}
+
+const statCards = [
+  {
+    key: 'pendingTasks',
+    label: 'Pending Tasks',
+    color: 'yellow',
+    icon: '⬡',
+    subKey: 'completedTasksToday',
+    subLabel: (v: number) => `${v} completed today`,
+    subColor: 'text-green-400',
+  },
+  {
+    key: 'todayRemindersCount',
+    label: "Today's Reminders",
+    color: 'cyan',
+    icon: '◎',
+    subKey: 'upcomingCount',
+    subLabel: (v: number) => `${v} upcoming total`,
+    subColor: 'text-cyan-400/60',
+  },
+  {
+    key: 'urgentTasks',
+    label: 'Urgent Tasks',
+    color: 'red',
+    icon: '⚠',
+    subLabel: () => 'Needs attention',
+    subColor: 'text-red-400/60',
+  },
+  {
+    key: 'unreadNotifications',
+    label: 'Unread Notifications',
+    color: 'yellow',
+    icon: '🔔',
+    subLabel: () => 'Awaiting review',
+    subColor: 'text-yellow-400/60',
+  },
+  {
+    key: 'unreadEmailCount',
+    label: 'Unread Emails',
+    color: 'cyan',
+    icon: '✉',
+    subColor: 'text-cyan-400/60',
+    isLink: true,
+  },
+]
+
+const colorMap: Record<string, string> = {
+  yellow: 'bg-yellow-400/10',
+  cyan: 'bg-cyan-400/10',
+  red: 'bg-red-400/10',
+}
+
+const iconColorMap: Record<string, string> = {
+  yellow: 'text-yellow-400',
+  cyan: 'text-cyan-400',
+  red: 'text-red-400',
+}
+
+export default function DashboardPage() {
+  const [dashData, setDashData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        const [dashRes, notifRes, emailRes] = await Promise.all([
+          fetch('/api/dashboard'),
+          fetch('/api/notifications?unreadOnly=true').catch(() => null),
+          fetch('/api/emails?unreadOnly=true').catch(() => null),
+        ])
+
+        const dash = await dashRes.json()
+        const notifData = notifRes ? await notifRes.json().catch(() => ({ total: 0 })) : { total: 0 }
+        const emailData = emailRes ? await emailRes.json().catch(() => ({ total: 0 })) : { total: 0 }
+
+        setDashData({
+          stats: {
+            pendingTasks: dash.stats?.pendingTasks ?? 0,
+            completedTasksToday: dash.stats?.completedTasksToday ?? 0,
+            urgentTasks: dash.stats?.urgentTasks ?? 0,
+            todayRemindersCount: dash.stats?.todayRemindersCount ?? 0,
+            unreadNotifications: notifData.total ?? notifData.unreadCount ?? 0,
+            unreadEmailCount: emailData.total ?? emailData.unreadCount ?? 0,
+          },
+          data: {
+            todayReminders: dash.data?.todayReminders ?? [],
+            upcomingReminders: dash.data?.upcomingReminders ?? [],
+            recentActivity: dash.data?.recentActivity ?? [],
+            urgentTasks: dash.data?.urgentTasks ?? [],
+            recentTasks: dash.data?.recentTasks ?? [],
+            trackers: dash.data?.trackers ?? [],
+            recentFiles: [],
+            agentRuns: [],
+            todayEvents: dash.data?.todayReminders ?? [],
+          },
+          user: dash.user ?? {},
+        })
+      } catch {
+        // fallback to empty state
+        setDashData({
+          stats: {
+            pendingTasks: 0,
+            completedTasksToday: 0,
+            urgentTasks: 0,
+            todayRemindersCount: 0,
+            unreadNotifications: 0,
+            unreadEmailCount: 0,
+          },
+          data: {
+            todayReminders: [],
+            upcomingReminders: [],
+            recentActivity: [],
+            urgentTasks: [],
+            recentTasks: [],
+            trackers: [],
+            recentFiles: [],
+            agentRuns: [],
+            todayEvents: [],
+          },
+          user: {},
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboard()
+  }, [])
+
+  const stats = dashData?.stats
+  const data = dashData?.data
+
+  const clientDashData = dashData
+    ? {
+        stats: {
+          pendingTasks: stats!.pendingTasks,
+          completedToday: stats!.completedTasksToday,
+          todayRemindersCount: stats!.todayRemindersCount,
+          unreadNotifications: stats!.unreadNotifications,
+          unreadEmailCount: stats!.unreadEmailCount,
+        },
+        data: data!,
+      }
+    : null
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <Header
-        title="Command Center"
-        subtitle={`${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`}
-      />
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Header
+          title="Command Center"
+          subtitle={`${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`}
+        />
+      </motion.div>
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-w-[1600px] mx-auto">
 
           {/* AI Orb - spans 1 col */}
-          <div className="lg:row-span-2">
-            <AIOrb userName={user?.name} />
-          </div>
+          <motion.div
+            className="lg:row-span-2"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0, duration: 0.4, ease: 'easeOut' }}
+          >
+            <AIOrb userName={dashData?.user?.name} />
+          </motion.div>
 
-          {/* Stats row */}
-          <div className="hud-stat-card rounded-xl p-5">
+          {/* Pending Tasks */}
+          <motion.div
+            className="hud-stat-card rounded-xl p-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.4, ease: 'easeOut' }}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Pending Tasks</div>
               <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center">
                 <span className="text-yellow-400 text-sm">⬡</span>
               </div>
             </div>
-            <div className="text-3xl font-bold text-white mb-1">{pendingTasks}</div>
-            <div className="text-green-400 text-xs">{completedToday} completed today</div>
-          </div>
+            <div className="text-3xl font-bold text-white mb-1">
+              {loading ? <span className="opacity-40">—</span> : stats?.pendingTasks ?? 0}
+            </div>
+            <div className="text-green-400 text-xs">
+              {loading ? '' : `${stats?.completedTasksToday ?? 0} completed today`}
+            </div>
+          </motion.div>
 
-          <div className="hud-stat-card rounded-xl p-5">
+          {/* Today's Reminders */}
+          <motion.div
+            className="hud-stat-card rounded-xl p-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.4, ease: 'easeOut' }}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Today&apos;s Reminders</div>
               <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center">
                 <span className="text-cyan-400 text-sm">◎</span>
               </div>
             </div>
-            <div className="text-3xl font-bold text-white mb-1">{todayReminders.length}</div>
-            <div className="text-cyan-400/60 text-xs">{upcomingReminders.length} upcoming total</div>
-          </div>
+            <div className="text-3xl font-bold text-white mb-1">
+              {loading ? <span className="opacity-40">—</span> : stats?.todayRemindersCount ?? 0}
+            </div>
+            <div className="text-cyan-400/60 text-xs">
+              {loading ? '' : `${data?.upcomingReminders?.length ?? 0} upcoming total`}
+            </div>
+          </motion.div>
 
-          <div className="hud-stat-card rounded-xl p-5">
+          {/* Urgent Tasks */}
+          <motion.div
+            className="hud-stat-card rounded-xl p-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.4, ease: 'easeOut' }}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Urgent Tasks</div>
               <div className="w-8 h-8 rounded-lg bg-red-400/10 flex items-center justify-center">
                 <span className="text-red-400 text-sm">⚠</span>
               </div>
             </div>
-            <div className="text-3xl font-bold text-white mb-1">{urgentTasks.length}</div>
+            <div className="text-3xl font-bold text-white mb-1">
+              {loading ? <span className="opacity-40">—</span> : stats?.urgentTasks ?? 0}
+            </div>
             <div className="text-red-400/60 text-xs">Needs attention</div>
-          </div>
+          </motion.div>
 
-          {/* Unread Notifications stat card */}
-          <div className="hud-stat-card rounded-xl p-5">
+          {/* Unread Notifications */}
+          <motion.div
+            className="hud-stat-card rounded-xl p-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.4, ease: 'easeOut' }}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Unread Notifications</div>
               <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center">
                 <span className="text-yellow-400 text-sm">🔔</span>
               </div>
             </div>
-            <div className="text-3xl font-bold text-white mb-1">{unreadNotifications}</div>
+            <div className="text-3xl font-bold text-white mb-1">
+              {loading ? <span className="opacity-40">—</span> : stats?.unreadNotifications ?? 0}
+            </div>
             <div className="text-yellow-400/60 text-xs">Awaiting review</div>
-          </div>
+          </motion.div>
 
-          {/* Unread Emails stat card */}
-          <div className="hud-stat-card rounded-xl p-5">
+          {/* Unread Emails */}
+          <motion.div
+            className="hud-stat-card rounded-xl p-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.4, ease: 'easeOut' }}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="text-white/40 text-xs uppercase tracking-wider">Unread Emails</div>
               <div className="w-8 h-8 rounded-lg bg-cyan-400/10 flex items-center justify-center">
                 <span className="text-cyan-400 text-sm">✉</span>
               </div>
             </div>
-            <div className="text-3xl font-bold text-white mb-1">{unreadEmailCount}</div>
+            <div className="text-3xl font-bold text-white mb-1">
+              {loading ? <span className="opacity-40">—</span> : stats?.unreadEmailCount ?? 0}
+            </div>
             <Link href="/emails" className="text-cyan-400/60 text-xs hover:text-cyan-400 transition-colors">
               View emails →
             </Link>
-          </div>
+          </motion.div>
 
           {/* Client-side dynamic components */}
-          <DashboardClient
-            initialData={dashData}
-            userId={user!.id}
-          />
+          {clientDashData && (
+            <DashboardClient
+              initialData={clientDashData}
+              userId=""
+            />
+          )}
 
           {/* Calendar + Live Data Row */}
-          <div className="col-span-full grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <motion.div
+            className="col-span-full grid grid-cols-1 lg:grid-cols-3 gap-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.4, ease: 'easeOut' }}
+          >
             <div className="lg:col-span-1">
               <CalendarWidget />
             </div>
-          </div>
+          </motion.div>
 
           {/* Live Data Row */}
-          <div className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-4">
+          <motion.div
+            className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7, duration: 0.4, ease: 'easeOut' }}
+          >
             <WeatherWidget />
             <NewsWidget />
             <CryptoWidget />
-          </div>
+          </motion.div>
         </div>
       </div>
     </div>
