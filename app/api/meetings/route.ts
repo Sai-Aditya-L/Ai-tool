@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+
+const createMeetingSchema = z.object({
+  title: z.string().min(1).max(200),
+  date: z.string().datetime().or(z.string().min(1)), // ISO date string
+  duration: z.number().int().min(1).max(1440).optional(), // max 24 hours
+  attendees: z.array(z.string().max(100)).max(100).optional(),
+  notes: z.string().max(50000).optional(),
+  status: z.enum(['scheduled', 'in_progress', 'completed', 'cancelled']).optional(),
+})
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -40,11 +50,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { title, date, duration, attendees, notes, status } = body
-
-    if (!title || !date) {
-      return NextResponse.json({ error: 'title and date are required' }, { status: 400 })
+    const parseResult = createMeetingSchema.safeParse(body)
+    if (!parseResult.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: parseResult.error.flatten() }, { status: 400 })
     }
+    const { title, date, duration, attendees, notes, status } = parseResult.data
 
     const meeting = await prisma.meeting.create({
       data: {

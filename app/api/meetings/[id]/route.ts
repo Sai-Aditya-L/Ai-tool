@@ -108,11 +108,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const action = searchParams.get('action')
 
   if (action === 'extract') {
+    const rl = rateLimit(`meetings-extract:${user.id}`, 10, 60_000)
+    if (!rl.allowed) return rateLimitResponse()
+
     try {
       const content = [
         meeting.title ? `Meeting: ${meeting.title}` : '',
-        meeting.notes ? `Notes:\n${meeting.notes}` : '',
-        meeting.transcript ? `Transcript:\n${meeting.transcript}` : '',
+        meeting.notes ? `Notes:\n${meeting.notes.slice(0, 12000)}` : '',
+        meeting.transcript ? `Transcript:\n${meeting.transcript.slice(0, 12000)}` : '',
       ]
         .filter(Boolean)
         .join('\n\n')
