@@ -14,16 +14,18 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://api.anthropic.com https://api.openai.com https://accounts.google.com",
+      "connect-src 'self' https://api.anthropic.com https://api.openai.com https://accounts.google.com https://oauth2.googleapis.com https://api.github.com https://api.duckduckgo.com https://api.open-meteo.com https://api.coingecko.com https://en.wikipedia.org https://restcountries.com wss: ws:",
       "frame-ancestors 'none'",
     ].join('; '),
   },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
 ]
 
 const nextConfig = {
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000'],
+      allowedOrigins: ['localhost:3000', process.env.NEXTAUTH_URL?.replace(/^https?:\/\//, '') || 'localhost:3000'].filter(Boolean),
     },
   },
   images: {
