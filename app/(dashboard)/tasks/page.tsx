@@ -355,7 +355,7 @@ function TaskRow({ task, onStatusChange, onDelete, onEdit, onTaskUpdate, selectM
             )}>
               {task.title}
               {task.isRecurring && (
-                <RefreshCw size={11} className="text-cyan-400/70 flex-shrink-0" title={`Recurring: ${task.recurringSchedule}`} />
+                <RefreshCw size={11} className="text-cyan-400/70 flex-shrink-0" aria-label={`Recurring: ${task.recurringSchedule}`} />
               )}
             </p>
             <div className="flex items-center gap-1 flex-shrink-0">

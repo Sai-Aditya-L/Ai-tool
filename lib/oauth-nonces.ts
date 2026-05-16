@@ -6,9 +6,9 @@ export const oauthNonces = new Map<string, { userId: string; expiresAt: number }
 // Clean up expired nonces every 10 minutes
 setInterval(() => {
   const now = Date.now()
-  for (const [nonce, data] of oauthNonces.entries()) {
+  Array.from(oauthNonces.entries()).forEach(([nonce, data]) => {
     if (data.expiresAt < now) oauthNonces.delete(nonce)
-  }
+  })
 }, 10 * 60 * 1000)
 
 /** Generate a cryptographically random nonce and store it for the given userId (10-minute TTL). */

@@ -24,9 +24,9 @@ export const pendingActions = new Map<string, PendingAction>()
 // Clean up actions older than 15 minutes
 function cleanupPendingActions() {
   const cutoff = new Date(Date.now() - 15 * 60 * 1000)
-  for (const [id, action] of pendingActions.entries()) {
+  Array.from(pendingActions.entries()).forEach(([id, action]) => {
     if (action.createdAt < cutoff) pendingActions.delete(id)
-  }
+  })
 }
 setInterval(cleanupPendingActions, 60 * 1000)
 

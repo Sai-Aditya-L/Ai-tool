@@ -51,9 +51,9 @@ export const authOptions: NextAuthOptions = {
           if (!totp) {
             throw new Error('TOTP_REQUIRED')
           }
-          const { authenticator } = await import('otplib')
+          const { verifyToken } = await import('@/lib/totp')
           const secret = Buffer.from(prefs.twoFactorSecret, 'base64').toString()
-          const valid = authenticator.verify({ token: totp, secret })
+          const valid = verifyToken(totp, secret)
           if (!valid) {
             throw new Error('Invalid authenticator code')
           }

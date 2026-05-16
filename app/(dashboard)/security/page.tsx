@@ -397,7 +397,7 @@ export default function SecurityPage() {
       ? navigator.userAgent.slice(0, 60) + (navigator.userAgent.length > 60 ? '…' : '')
       : 'Unknown browser'
 
-  const isCredentials = session?.user && !(session as Record<string, unknown>)?.googleAccessToken
+  const isCredentials = session?.user && !(session as unknown as Record<string, unknown>)?.googleAccessToken
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: '#000810' }}>

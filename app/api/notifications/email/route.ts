@@ -21,7 +21,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
     const nodemailer = await import('nodemailer').catch(() => null)
     if (!nodemailer) return false
 
-    const transporter = nodemailer.default.createTransporter({
+    const transporter = nodemailer.default.createTransport({
       host: smtpHost,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',

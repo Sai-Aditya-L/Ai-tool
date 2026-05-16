@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { authenticator } from 'otplib'
+import { verifyToken } from '@/lib/totp'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     const secret = Buffer.from(stored, 'base64').toString()
-    const valid = authenticator.verify({ token, secret })
+    const valid = verifyToken(token, secret)
 
     return NextResponse.json({ valid })
   } catch {

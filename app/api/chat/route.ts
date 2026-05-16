@@ -14,7 +14,7 @@ import {
 } from '@/lib/google'
 import { getGitHubClient, listRepos, isGitHubConnected } from '@/lib/github'
 import Anthropic from '@anthropic-ai/sdk'
-import { orchestrate } from '@/app/api/agents/orchestrate/route'
+import { orchestrate } from '@/lib/orchestrator'
 
 // ---------------------------------------------------------------------------
 // Orchestration helper — calls orchestrate logic directly (no HTTP round-trip)

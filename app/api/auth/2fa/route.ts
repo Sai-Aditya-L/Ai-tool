@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { authenticator } from 'otplib'
+import { generateSecret, keyuri, verifyToken } from '@/lib/totp'
 import QRCode from 'qrcode'
 
 export async function GET(req: NextRequest) {
@@ -26,9 +26,9 @@ export async function GET(req: NextRequest) {
 
   // Default: generate new TOTP secret + QR code for setup
   // Secret is NOT saved to DB here — only saved after verification
-  const secret = authenticator.generateSecret()
+  const secret = generateSecret()
   const email = user.email ?? session.user.email
-  const otpauthUri = authenticator.keyuri(email, 'NEXUS', secret)
+  const otpauthUri = keyuri(email, 'NEXUS', secret)
   const qrCode = await QRCode.toDataURL(otpauthUri)
 
   return NextResponse.json({ secret, qrCode, uri: otpauthUri })
@@ -48,8 +48,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing secret or token' }, { status: 400 })
     }
 
-    const isValid = authenticator.verify({ token, secret })
-    if (!isValid) {
+    if (!verifyToken(token, secret)) {
       return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })
     }
 
@@ -110,8 +109,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const secret = Buffer.from(stored, 'base64').toString()
-    const isValid = authenticator.verify({ token, secret })
-    if (!isValid) {
+    if (!verifyToken(token, secret)) {
       return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })
     }
 

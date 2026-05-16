@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
-  if (!user?.hashedPassword) {
+  if (!user?.password) {
     return NextResponse.json({ error: 'Password change not available for OAuth accounts' }, { status: 400 })
   }
 
@@ -24,11 +24,11 @@ export async function POST(req: NextRequest) {
   if (!parse.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
   const { currentPassword, newPassword } = parse.data
-  const valid = await bcrypt.compare(currentPassword, user.hashedPassword)
+  const valid = await bcrypt.compare(currentPassword, user.password)
   if (!valid) return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 })
 
   const hashed = await bcrypt.hash(newPassword, 12)
-  await prisma.user.update({ where: { id: user.id }, data: { hashedPassword: hashed } })
+  await prisma.user.update({ where: { id: user.id }, data: { password: hashed } })
 
   await prisma.activityLog.create({
     data: { userId: user.id, action: 'password_changed', entityType: 'user', entityId: user.id, metadata: '{}' },
