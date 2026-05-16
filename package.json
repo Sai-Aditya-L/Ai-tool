@@ -39,6 +39,7 @@
     "next-auth": "^4.24.11",
     "node-cron": "^4.2.1",
     "openai": "^6.37.0",
+    "otplib": "^13.4.0",
     "pdf-parse": "^2.4.5",
     "qrcode": "^1.5.4",
     "react": "^18",

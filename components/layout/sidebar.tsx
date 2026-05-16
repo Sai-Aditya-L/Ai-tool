@@ -11,7 +11,8 @@ import {
   StickyNote, Mail, Bot, Code2, Wifi, Sparkles, Newspaper, TrendingUp,
   Wrench, BrainCircuit, Monitor, Music2, Home, FlameKindling,
   Shield, Target, Network, Microscope, Plane, Lock, BookOpen, MousePointer2, Gauge,
-  Eye, HeartPulse, Blocks, Smartphone, Users
+  Eye, HeartPulse, Blocks, Smartphone, Users,
+  Timer, Trophy, Search
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -33,6 +34,7 @@ const navItems = [
       { href: '/calendar', icon: Calendar, label: 'Calendar', color: 'text-blue-400' },
       { href: '/emails', icon: Mail, label: 'Emails', color: 'text-cyan-400' },
       { href: '/notes', icon: StickyNote, label: 'Notes', color: 'text-pink-400' },
+      { href: '/snippets', icon: Code2, label: 'Snippets', color: 'text-orange-400' },
       { href: '/habits', icon: FlameKindling, label: 'Habits', color: 'text-orange-400' },
       { href: '/goals', icon: Target, label: 'Goals', color: 'text-pink-400' },
     ],
@@ -44,6 +46,8 @@ const navItems = [
       { href: '/knowledge-graph', icon: Network, label: 'Knowledge Graph', color: 'text-violet-400' },
       { href: '/daily-summaries', icon: Sparkles, label: 'Daily Briefing', color: 'text-cyan-400' },
       { href: '/research', icon: Microscope, label: 'Research', color: 'text-violet-400' },
+      { href: '/focus', icon: Timer, label: 'Focus Timer', color: 'text-amber-400' },
+      { href: '/search', icon: Search, label: 'Global Search', color: 'text-cyan-400' },
       { href: '/meetings', icon: Calendar, label: 'Meetings', color: 'text-blue-400' },
       { href: '/travel', icon: Plane, label: 'Travel', color: 'text-sky-400' },
       { href: '/cybersecurity', icon: Shield, label: 'Cybersecurity', color: 'text-red-400' },
@@ -78,6 +82,7 @@ const navItems = [
       { href: '/mobile', icon: Smartphone, label: 'Mobile & PWA', color: 'text-cyan-400' },
       { href: '/workspaces', icon: Users, label: 'Workspaces', color: 'text-violet-400' },
       { href: '/settings', icon: Settings, label: 'Settings', color: 'text-white/60' },
+      { href: '/achievements', icon: Trophy, label: 'Achievements', color: 'text-yellow-400' },
     ],
   },
 ]

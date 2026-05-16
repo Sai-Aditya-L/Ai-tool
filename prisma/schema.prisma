@@ -57,6 +57,9 @@ model User {
   workspaceMemberships WorkspaceMember[]
   workspaceItems     WorkspaceItem[]   @relation("WorkspaceItemAdder")
   meetings         Meeting[]
+  snippets         Snippet[]
+  focusSessions    FocusSession[]
+  achievements     Achievement[]
 }
 
 model Account {
@@ -130,6 +133,9 @@ model Task {
   parentId    String?
   recurring   Boolean   @default(false)
   recurrenceRule String?
+  isRecurring        Boolean @default(false)
+  recurringSchedule  String? // "daily", "weekly", "monthly", "weekdays"
+  recurringParentId  String?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -837,4 +843,62 @@ model Meeting {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
+}
+
+model Snippet {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  language  String   @default("text")
+  code      String
+  tags      String   @default("[]")
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model FocusSession {
+  id          String    @id @default(cuid())
+  userId      String
+  taskId      String?
+  taskTitle   String?
+  type        String    @default("pomodoro") // pomodoro, short_break, long_break, deep_work
+  plannedMins Int       @default(25)
+  actualMins  Int?
+  completed   Boolean   @default(false)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
+
+model Achievement {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // first_task, streak_7, focus_10, notes_50, etc.
+  name      String
+  desc      String
+  icon      String   @default("🏆")
+  earnedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  userId      String?
+  type        String   // email_poll, automation_run, digest_send, webhook_retry
+  payload     String   @default("{}")
+  status      String   @default("pending") // pending, running, done, failed
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(3)
+  nextRunAt   DateTime @default(now())
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([status, nextRunAt])
 }
