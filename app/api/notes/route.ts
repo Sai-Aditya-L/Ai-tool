@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
+import { checkAndAwardAchievements } from '@/lib/achievements'
 
 const noteSchema = z.object({
   title: z.string().min(1).max(200),
@@ -65,6 +66,8 @@ export async function POST(req: NextRequest) {
         details: `Created note: ${note.title}`,
       },
     })
+
+    checkAndAwardAchievements(user.id).catch(() => {})
 
     return NextResponse.json({ note }, { status: 201 })
   } catch (error) {

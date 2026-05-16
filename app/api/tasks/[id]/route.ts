@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { checkAndAwardAchievements } from '@/lib/achievements'
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -46,6 +47,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         details: `Updated task: ${updated.title}${data.status ? ` → ${data.status}` : ''}`,
       },
     })
+
+    if (updated.status === 'completed') {
+      checkAndAwardAchievements(user.id).catch(() => {})
+    }
 
     return NextResponse.json({ task: updated })
   } catch (error) {
