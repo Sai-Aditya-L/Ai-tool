@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
-import { Calendar, Plus, Clock, MapPin, Users, Video, ExternalLink, RefreshCw, Trash2, X, Link as LinkIcon } from 'lucide-react'
+import { Calendar, Plus, Clock, MapPin, Users, Video, ExternalLink, RefreshCw, Trash2, X, Link as LinkIcon, AlertTriangle } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -39,6 +39,8 @@ export default function CalendarPage() {
     title: '', description: '', location: '',
     startTime: '', endTime: '', attendees: '',
   })
+  const [conflicts, setConflicts] = useState<{ title: string; startTime: string; endTime: string }[]>([])
+  const [checkingConflicts, setCheckingConflicts] = useState(false)
 
   useEffect(() => { fetchEvents() }, [])
 
@@ -54,6 +56,24 @@ export default function CalendarPage() {
       toast.error('Failed to load calendar events')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function checkConflicts(startTime: string, endTime: string) {
+    if (!startTime || !endTime) { setConflicts([]); return }
+    setCheckingConflicts(true)
+    try {
+      const res = await fetch('/api/calendar/conflicts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString() }),
+      })
+      const data = await res.json()
+      setConflicts(data.conflicts ?? [])
+    } catch {
+      setConflicts([])
+    } finally {
+      setCheckingConflicts(false)
     }
   }
 
@@ -330,13 +350,53 @@ export default function CalendarPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-white/40 text-xs mb-1 block">Start *</label>
-                      <input type="datetime-local" value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} required className="nexus-input" />
+                      <input
+                        type="datetime-local"
+                        value={form.startTime}
+                        onChange={e => {
+                          const v = e.target.value
+                          setForm(f => ({ ...f, startTime: v }))
+                          if (form.endTime) checkConflicts(v, form.endTime)
+                        }}
+                        required
+                        className="nexus-input"
+                      />
                     </div>
                     <div>
                       <label className="text-white/40 text-xs mb-1 block">End *</label>
-                      <input type="datetime-local" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} required className="nexus-input" />
+                      <input
+                        type="datetime-local"
+                        value={form.endTime}
+                        onChange={e => {
+                          const v = e.target.value
+                          setForm(f => ({ ...f, endTime: v }))
+                          if (form.startTime) checkConflicts(form.startTime, v)
+                        }}
+                        required
+                        className="nexus-input"
+                      />
                     </div>
                   </div>
+                  {/* Conflict warnings */}
+                  {checkingConflicts && (
+                    <p className="text-white/30 text-[10px] flex items-center gap-1.5">
+                      <span className="w-2 h-2 border border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                      Checking for conflicts…
+                    </p>
+                  )}
+                  {!checkingConflicts && conflicts.length > 0 && (
+                    <div className="p-2.5 rounded-lg border border-red-400/25 bg-red-400/5">
+                      <div className="flex items-center gap-1.5 text-red-400 text-xs font-medium mb-1">
+                        <AlertTriangle size={12} />
+                        {conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''} detected
+                      </div>
+                      {conflicts.map(c => (
+                        <p key={c.title} className="text-red-400/70 text-[11px]">
+                          • {c.title} ({new Date(c.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} – {new Date(c.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })})
+                        </p>
+                      ))}
+                    </div>
+                  )}
                   <input type="text" placeholder="Attendees (comma-separated emails)" value={form.attendees} onChange={e => setForm(f => ({ ...f, attendees: e.target.value }))} className="nexus-input" />
                   <div className="flex gap-2">
                     <button type="submit" className="nexus-btn-primary flex-1">Create Event</button>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, Trash2, Check, Flame } from 'lucide-react'
+import { Plus, Trash2, Check, Flame, Sparkles, Loader2, TrendingUp, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -57,6 +57,8 @@ export default function HabitsPage() {
   const [newHabit, setNewHabit] = useState({ title: '', color: '#00e5ff' })
   const [submitting, setSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [insights, setInsights] = useState<{ summary: string; topHabit?: string; atRisk?: string | null; insights: { habit: string; pattern: string; tip: string }[] } | null>(null)
+  const [insightsLoading, setInsightsLoading] = useState(false)
 
   const last7Days = getLast7Days()
 
@@ -76,6 +78,15 @@ export default function HabitsPage() {
   useEffect(() => {
     loadHabits()
   }, [loadHabits])
+
+  async function loadInsights() {
+    setInsightsLoading(true)
+    try {
+      const res = await fetch('/api/habits/insights')
+      if (res.ok) setInsights(await res.json())
+    } catch {}
+    setInsightsLoading(false)
+  }
 
   async function toggleToday(habitId: string) {
     await fetch(`/api/habits/${habitId}`, {
@@ -127,23 +138,68 @@ export default function HabitsPage() {
       <Header title="HABIT TRACKER" subtitle="Build consistency, track streaks" />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* AI Insights panel */}
+        {(insights || insightsLoading) && (
+          <div className="rounded-2xl border border-violet-400/15 bg-violet-400/3 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles size={13} className="text-violet-400" />
+              <span className="text-white/60 text-sm font-medium">NEXUS Habit Insights</span>
+              {insights?.topHabit && <span className="ml-auto text-[10px] text-green-400 nexus-mono">🏆 {insights.topHabit}</span>}
+            </div>
+            {insightsLoading ? (
+              <div className="flex items-center gap-2 text-white/30 text-sm">
+                <Loader2 size={14} className="animate-spin text-violet-400" />
+                Analyzing patterns…
+              </div>
+            ) : insights ? (
+              <>
+                <p className="text-white/60 text-sm">{insights.summary}</p>
+                {insights.atRisk && (
+                  <div className="flex items-center gap-2 text-amber-400 text-xs">
+                    <AlertTriangle size={12} />
+                    At risk: <span className="font-medium">{insights.atRisk}</span>
+                  </div>
+                )}
+                {insights.insights?.slice(0, 3).map((ins, i) => (
+                  <div key={i} className="p-2.5 rounded-lg bg-white/3 border border-white/8 text-xs space-y-1">
+                    <p className="text-violet-400/80 font-medium">{ins.habit}</p>
+                    <p className="text-white/55">{ins.pattern}</p>
+                    <p className="text-cyan-400/70 flex items-center gap-1"><TrendingUp size={10} /> {ins.tip}</p>
+                  </div>
+                ))}
+              </>
+            ) : null}
+          </div>
+        )}
+
         {/* Top bar */}
         <div className="flex items-center justify-between">
           <div className="text-white/40 text-sm">
             {habits.length} active habit{habits.length !== 1 ? 's' : ''}
           </div>
-          <button
-            onClick={() => setShowAddForm(prev => !prev)}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
-              showAddForm
-                ? 'bg-white/10 text-white/60'
-                : 'bg-cyan-400/20 text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/30'
-            )}
-          >
-            <Plus size={16} />
-            {showAddForm ? 'Cancel' : 'Add Habit'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={loadInsights}
+              disabled={insightsLoading}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-400/25 bg-violet-400/5 text-violet-400 text-xs hover:bg-violet-400/12 transition-all disabled:opacity-40"
+              title="Get AI habit insights"
+            >
+              {insightsLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              Insights
+            </button>
+            <button
+              onClick={() => setShowAddForm(prev => !prev)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                showAddForm
+                  ? 'bg-white/10 text-white/60'
+                  : 'bg-cyan-400/20 text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/30'
+              )}
+            >
+              <Plus size={16} />
+              {showAddForm ? 'Cancel' : 'Add Habit'}
+            </button>
+          </div>
         </div>
 
         {/* Add Habit inline form */}
