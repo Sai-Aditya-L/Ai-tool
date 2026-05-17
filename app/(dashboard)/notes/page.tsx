@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, StickyNote, Pin, PinOff, Trash2, X, Search, Edit3, Save, Eye, CheckSquare, Check } from 'lucide-react'
+import { Plus, StickyNote, Pin, PinOff, Trash2, X, Search, Edit3, Save, Eye, CheckSquare, Check, Sparkles, Loader2, Tag } from 'lucide-react'
 import { cn, formatRelativeTime, parseTags } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -139,6 +139,9 @@ export default function NotesPage() {
   const [previewMode, setPreviewMode] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [aiResult, setAiResult] = useState<string | null>(null)
+  const [aiAction, setAiAction] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
 
   useEffect(() => { fetchNotes() }, [search])
 
@@ -206,6 +209,47 @@ export default function NotesPage() {
     } catch {
       toast.error('Failed to delete note')
     }
+  }
+
+  async function runNoteAI(action: string) {
+    if (!editingNote?.id) return
+    setAiLoading(true)
+    setAiAction(action)
+    setAiResult(null)
+    try {
+      const res = await fetch(`/api/notes/${editingNote.id}/ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (action === 'tags' && data.tags?.length) {
+        const existing = form.tags ? form.tags.split(',').map((t: string) => t.trim()) : []
+        const merged = Array.from(new Set([...existing, ...data.tags])).join(', ')
+        setForm(f => ({ ...f, tags: merged }))
+        toast.success('Tags added!')
+      } else {
+        setAiResult(data.result)
+      }
+    } catch {
+      toast.error('AI action failed')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  function applyAiResult() {
+    if (!aiResult) return
+    if (aiAction === 'summarize') {
+      setForm(f => ({ ...f, content: f.content + '\n\n---\n**Summary:** ' + aiResult }))
+    } else if (aiAction === 'actions') {
+      setForm(f => ({ ...f, content: f.content + '\n\n---\n**Action Items:**\n' + aiResult }))
+    } else if (aiAction === 'expand' || aiAction === 'rewrite') {
+      setForm(f => ({ ...f, content: aiResult }))
+    }
+    setAiResult(null)
+    setAiAction(null)
+    toast.success('Applied to note')
   }
 
   function startEditing(note: Note) {
@@ -390,6 +434,44 @@ export default function NotesPage() {
                     {NOTE_COLORS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
+                {/* AI Actions (only for existing notes with content) */}
+                {editingNote && form.content.trim() && (
+                  <div className="space-y-2">
+                    <div className="flex gap-1.5 flex-wrap">
+                      {[
+                        { key: 'summarize', label: 'Summarize' },
+                        { key: 'actions', label: 'Action Items' },
+                        { key: 'expand', label: 'Expand' },
+                        { key: 'rewrite', label: 'Rewrite' },
+                        { key: 'tags', label: 'Auto-tag', icon: <Tag size={10} /> },
+                      ].map(({ key, label, icon }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => runNoteAI(key)}
+                          disabled={aiLoading}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-400/20 bg-violet-400/5 text-violet-400/80 text-[11px] hover:bg-violet-400/12 transition-all disabled:opacity-30"
+                        >
+                          {aiLoading && aiAction === key ? <Loader2 size={10} className="animate-spin" /> : icon ?? <Sparkles size={10} />}
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {aiResult && (
+                      <div className="p-3 rounded-lg border border-violet-400/20 bg-violet-400/5">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-violet-400 text-[10px] nexus-mono uppercase">{aiAction}</span>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={applyAiResult} className="text-cyan-400 text-[10px] hover:underline">Apply</button>
+                            <button type="button" onClick={() => { setAiResult(null); setAiAction(null) }} className="text-white/30 text-[10px] hover:text-white/50">Dismiss</button>
+                          </div>
+                        </div>
+                        <p className="text-white/65 text-xs leading-relaxed whitespace-pre-wrap">{aiResult}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <button type="submit" className="nexus-btn-primary flex-1 flex items-center justify-center gap-2">
                     <Save size={14} /> {editingNote ? 'Update Note' : 'Create Note'}
