@@ -10,7 +10,8 @@ import { NewsWidget } from '@/components/dashboard/news-widget'
 import { CryptoWidget } from '@/components/dashboard/crypto-widget'
 import { CalendarWidget } from '@/components/dashboard/calendar-widget'
 import Link from 'next/link'
-import { Sparkles, BarChart2, Loader2, RotateCcw, Flame } from 'lucide-react'
+import { Sparkles, BarChart2, Loader2, RotateCcw, Flame, Activity, Zap } from 'lucide-react'
+import { useNexusLive } from '@/components/providers/nexus-live-provider'
 
 interface DashboardStats {
   pendingTasks: number
@@ -97,6 +98,7 @@ const iconColorMap: Record<string, string> = {
 export default function DashboardPage() {
   const [dashData, setDashData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const { unreadCount: liveUnread, activeRun, connected, latestNotification } = useNexusLive()
 
   useEffect(() => { document.title = 'Dashboard | NEXUS' }, [])
 
@@ -308,7 +310,7 @@ export default function DashboardPage() {
             <div className="text-red-400/60 text-xs">Needs attention</div>
           </motion.div>
 
-          {/* Unread Notifications */}
+          {/* Unread Notifications — live via SSE */}
           <motion.div
             className="hud-stat-card rounded-xl p-5"
             initial={{ opacity: 0, y: 20 }}
@@ -316,15 +318,24 @@ export default function DashboardPage() {
             transition={{ delay: 0.4, duration: 0.4, ease: 'easeOut' }}
           >
             <div className="flex items-start justify-between mb-3">
-              <div className="text-white/40 text-xs uppercase tracking-wider">Unread Notifications</div>
-              <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center">
+              <div className="text-white/40 text-xs uppercase tracking-wider">Notifications</div>
+              <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center relative">
                 <span className="text-yellow-400 text-sm">🔔</span>
+                {connected && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-400 border border-black" title="Live" />
+                )}
               </div>
             </div>
             <div className="text-3xl font-bold text-white mb-1">
-              {loading ? <span className="opacity-40">—</span> : stats?.unreadNotifications ?? 0}
+              {liveUnread > 0 ? liveUnread : (loading ? <span className="opacity-40">—</span> : stats?.unreadNotifications ?? 0)}
             </div>
-            <div className="text-yellow-400/60 text-xs">Awaiting review</div>
+            {latestNotification ? (
+              <div className="text-yellow-400/70 text-xs truncate" title={latestNotification.title}>
+                ● {latestNotification.title}
+              </div>
+            ) : (
+              <div className="text-yellow-400/60 text-xs">Awaiting review</div>
+            )}
           </motion.div>
 
           {/* Unread Emails */}
@@ -426,6 +437,41 @@ export default function DashboardPage() {
               </div>
             )}
           </motion.div>
+
+          {/* NEXUS Live Activity */}
+          {(activeRun || connected) && (
+            <motion.div
+              className="hud-stat-card rounded-xl p-5"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Activity size={13} className={activeRun?.status === 'running' ? 'text-violet-400 animate-pulse' : 'text-green-400'} />
+                <span className="text-white/40 text-xs uppercase tracking-wider">NEXUS Live</span>
+                <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full ${connected ? 'bg-green-400/15 text-green-400' : 'bg-yellow-400/15 text-yellow-400'}`}>
+                  {connected ? 'ONLINE' : 'SYNC…'}
+                </span>
+              </div>
+              {activeRun ? (
+                <div>
+                  <div className={`text-xs font-medium mb-1 ${activeRun.status === 'running' ? 'text-violet-400' : activeRun.status === 'completed' ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {activeRun.status === 'running' ? '⚡ Running' : activeRun.status === 'completed' ? '✓ Done' : activeRun.status === 'waiting' ? '⏳ Queued' : activeRun.status}
+                  </div>
+                  <p className="text-white/65 text-xs leading-relaxed line-clamp-2">{activeRun.task}</p>
+                  <Link href="/agents" className="text-violet-400/60 text-xs hover:text-violet-400 mt-2 inline-block transition-colors">View agents →</Link>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-1.5 text-green-400 text-xs mb-1">
+                    <Zap size={10} />
+                    All systems nominal
+                  </div>
+                  <p className="text-white/30 text-xs">No active agent runs</p>
+                </div>
+              )}
+            </motion.div>
+          )}
 
           {/* Client-side dynamic components */}
           {clientDashData && (

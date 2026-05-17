@@ -11,13 +11,13 @@ import { QuickCapture } from '@/components/ui/quick-capture'
 import { NexusVoiceButton } from '@/components/voice/nexus-voice-button'
 import { NexusParticles } from '@/components/ui/nexus-particles'
 import { NexusHudOverlay } from '@/components/ui/nexus-hud-overlay'
+import { NexusLiveProvider } from '@/components/providers/nexus-live-provider'
+import { NexusActivityPanel } from '@/components/ui/nexus-activity-panel'
+import { ActivityPanelProvider, useActivityPanel } from '@/components/providers/activity-panel-provider'
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const { open: activityPanelOpen, setOpen: setActivityPanelOpen } = useActivityPanel()
   const { data: session } = useSession()
   const pathname = usePathname()
   const router = useRouter()
@@ -54,6 +54,7 @@ export default function DashboardLayout({
   }
 
   return (
+    <NexusLiveProvider>
     <div
       className={`flex h-screen overflow-hidden${theme === 'light' ? ' light-mode' : ''}`}
       style={{ background: theme === 'light' ? '#f0f4f8' : '#000810' }}
@@ -124,6 +125,16 @@ export default function DashboardLayout({
       <NexusVoiceButton />
       <NexusHudOverlay />
       <NexusParticles count={50} />
+      <NexusActivityPanel open={activityPanelOpen} onClose={() => setActivityPanelOpen(false)} />
     </div>
+    </NexusLiveProvider>
+  )
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ActivityPanelProvider>
+      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+    </ActivityPanelProvider>
   )
 }
