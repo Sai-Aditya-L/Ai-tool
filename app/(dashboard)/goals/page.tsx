@@ -14,6 +14,10 @@ import {
   Calendar,
   TrendingUp,
   Flag,
+  Sparkles,
+  Loader2,
+  ArrowRight,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -617,10 +621,27 @@ function AddGoalForm({ onCreated }: { onCreated: () => void }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+interface CoachAdvice {
+  goalTitle: string
+  insight: string
+  action: string
+  urgency: 'high' | 'medium' | 'low'
+}
+
+interface CoachData {
+  summary: string
+  momentum: 'rising' | 'steady' | 'falling'
+  advice: CoachAdvice[]
+  topPriority?: string
+}
+
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState('all')
+  const [coach, setCoach] = useState<CoachData | null>(null)
+  const [coachLoading, setCoachLoading] = useState(false)
+  const [showCoach, setShowCoach] = useState(false)
 
   const loadGoals = useCallback(async () => {
     try {
@@ -638,6 +659,16 @@ export default function GoalsPage() {
   useEffect(() => {
     loadGoals()
   }, [loadGoals])
+
+  async function loadCoach() {
+    setCoachLoading(true)
+    setShowCoach(true)
+    try {
+      const res = await fetch('/api/goals/coach')
+      if (res.ok) setCoach(await res.json())
+    } catch {}
+    setCoachLoading(false)
+  }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this goal and all its milestones?')) return
@@ -666,6 +697,77 @@ export default function GoalsPage() {
           <StatCard label="Completed this month" value={completedThisMonth(goals)} icon={CheckCircle2} />
           <StatCard label="Milestones due this week" value={milestonesThisWeek(goals)} icon={Calendar} />
           <StatCard label="Average progress" value={`${avgProgress(goals)}%`} icon={TrendingUp} />
+        </div>
+
+        {/* NEXUS Goal Coach */}
+        <div className="rounded-2xl border border-violet-400/15 bg-violet-400/3 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-violet-400/10">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} className="text-violet-400" />
+              <span className="text-white/60 text-sm font-medium">NEXUS Goal Coach</span>
+              {coach?.momentum && (
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border nexus-mono ${
+                  coach.momentum === 'rising' ? 'text-green-400 border-green-400/30 bg-green-400/8' :
+                  coach.momentum === 'falling' ? 'text-red-400 border-red-400/30 bg-red-400/8' :
+                  'text-yellow-400 border-yellow-400/30 bg-yellow-400/8'
+                }`}>
+                  {coach.momentum === 'rising' ? '↑ RISING' : coach.momentum === 'falling' ? '↓ FALLING' : '→ STEADY'}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={loadCoach}
+              disabled={coachLoading}
+              className="flex items-center gap-1.5 text-xs text-violet-400/70 hover:text-violet-400 transition-colors disabled:opacity-40"
+            >
+              {coachLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {showCoach ? 'Refresh' : 'Get AI coaching'}
+            </button>
+          </div>
+
+          {showCoach && (
+            <div className="px-5 py-4">
+              {coachLoading ? (
+                <div className="flex items-center gap-3 text-white/40 text-sm py-4">
+                  <Loader2 size={16} className="animate-spin text-violet-400" />
+                  NEXUS is analyzing your goals…
+                </div>
+              ) : coach ? (
+                <div className="space-y-4">
+                  {coach.summary && (
+                    <p className="text-white/65 text-sm leading-relaxed">{coach.summary}</p>
+                  )}
+                  {coach.topPriority && (
+                    <div className="flex items-start gap-2.5 p-3 rounded-lg border border-amber-400/20 bg-amber-400/5">
+                      <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-amber-400 text-xs font-medium mb-0.5">Top Priority</p>
+                        <p className="text-white/70 text-xs">{coach.topPriority}</p>
+                      </div>
+                    </div>
+                  )}
+                  {coach.advice.length > 0 && (
+                    <div className="space-y-2.5">
+                      {coach.advice.map((a, i) => (
+                        <div key={i} className={`p-3 rounded-lg border ${
+                          a.urgency === 'high' ? 'border-red-400/20 bg-red-400/5' :
+                          a.urgency === 'medium' ? 'border-yellow-400/20 bg-yellow-400/5' :
+                          'border-white/8 bg-white/3'
+                        }`}>
+                          <p className="text-white/50 text-[10px] nexus-mono mb-1 truncate">{a.goalTitle}</p>
+                          <p className="text-white/70 text-xs mb-1.5">{a.insight}</p>
+                          <div className="flex items-center gap-1.5 text-cyan-400 text-[11px]">
+                            <ArrowRight size={10} />
+                            {a.action}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* Category tabs */}
