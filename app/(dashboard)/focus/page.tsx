@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Header } from '@/components/layout/header'
-import { Timer, Play, Pause, RotateCcw, CheckSquare, Coffee, Brain, Zap, BarChart2, Trophy } from 'lucide-react'
+import { Timer, Play, Pause, RotateCcw, CheckSquare, Coffee, Brain, Zap, BarChart2, Trophy, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -165,6 +165,8 @@ export default function FocusPage() {
   const [timeLeft, setTimeLeft] = useState(SESSION_TYPES[0].minutes * 60)
   const [running, setRunning] = useState(false)
   const [taskTitle, setTaskTitle] = useState('')
+  const [pendingTasks, setPendingTasks] = useState<Array<{ id: string; title: string; priority: string }>>([])
+  const [showTaskPicker, setShowTaskPicker] = useState(false)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [sessions, setSessions] = useState<FocusSession[]>([])
@@ -206,6 +208,10 @@ export default function FocusPage() {
   useEffect(() => {
     fetchStats()
     fetchSessions()
+    fetch('/api/tasks?status=pending&limit=8')
+      .then(r => r.ok ? r.json() : { tasks: [] })
+      .then(d => setPendingTasks((d.tasks ?? []).slice(0, 8).map((t: { id: string; title: string; priority: string }) => ({ id: t.id, title: t.title, priority: t.priority }))))
+      .catch(() => {})
   }, [fetchStats, fetchSessions])
 
   // ── Keep selectedTypeRef in sync ────────────────────────────────────────────
@@ -401,15 +407,53 @@ export default function FocusPage() {
               color={selectedType.color}
             />
 
-            {/* Task input */}
-            <input
-              type="text"
-              placeholder="What are you focusing on? (optional)"
-              value={taskTitle}
-              onChange={e => setTaskTitle(e.target.value)}
-              disabled={running}
-              className="nexus-input text-center max-w-sm"
-            />
+            {/* Task input + picker */}
+            <div className="relative w-full max-w-sm">
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  placeholder="What are you focusing on? (optional)"
+                  value={taskTitle}
+                  onChange={e => setTaskTitle(e.target.value)}
+                  disabled={running}
+                  className="nexus-input flex-1 text-center"
+                />
+                {!running && pendingTasks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTaskPicker(p => !p)}
+                    className="flex items-center gap-1 px-2.5 rounded-lg border border-white/10 bg-white/5 text-white/40 hover:text-cyan-400 hover:border-cyan-400/30 transition-all flex-shrink-0"
+                    title="Pick from pending tasks"
+                  >
+                    <CheckSquare size={13} />
+                    <ChevronDown size={11} />
+                  </button>
+                )}
+              </div>
+              {showTaskPicker && (
+                <div
+                  className="absolute top-full mt-1 left-0 right-0 rounded-xl border border-white/10 shadow-2xl z-20 overflow-hidden"
+                  style={{ background: 'rgba(5,10,25,0.98)' }}
+                >
+                  <p className="text-white/30 text-[10px] uppercase tracking-widest px-3 pt-2 pb-1">Pending Tasks</p>
+                  {pendingTasks.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => { setTaskTitle(t.title); setShowTaskPicker(false) }}
+                      className="w-full text-left px-3 py-2 text-xs text-white/70 hover:text-cyan-300 hover:bg-cyan-400/8 transition-all flex items-center gap-2"
+                    >
+                      <span className={cn(
+                        'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                        t.priority === 'urgent' ? 'bg-red-400' :
+                        t.priority === 'high' ? 'bg-orange-400' :
+                        t.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
+                      )} />
+                      <span className="truncate">{t.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Controls */}
             <div className="flex items-center gap-3">

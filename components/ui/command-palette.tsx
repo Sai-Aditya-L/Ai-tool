@@ -33,39 +33,19 @@ import {
   Plus,
   Download,
   Search,
+  Loader2,
+  Sparkles,
+  FileText,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ICON_MAP: Record<string, React.ComponentType<any>> = {
-  LayoutDashboard,
-  MessageSquare,
-  CheckSquare,
-  Bell,
-  Calendar,
-  StickyNote,
-  Bot,
-  Mic,
-  Brain,
-  FolderOpen,
-  Target,
-  FlameKindling,
-  Microscope,
-  Code2,
-  Shield,
-  Network,
-  Eye,
-  Gauge,
-  MousePointer2,
-  Users,
-  Blocks,
-  HeartPulse,
-  BarChart2,
-  Smartphone,
-  Lock,
-  Settings,
-  Plus,
-  Download,
+  LayoutDashboard, MessageSquare, CheckSquare, Bell, Calendar, StickyNote,
+  Bot, Mic, Brain, FolderOpen, Target, FlameKindling, Microscope, Code2,
+  Shield, Network, Eye, Gauge, MousePointer2, Users, Blocks, HeartPulse,
+  BarChart2, Smartphone, Lock, Settings, Plus, Download, FileText, Zap,
 }
 
 interface NavItem {
@@ -84,7 +64,17 @@ interface ActionItem {
   action: () => void
 }
 
-type CommandItem = NavItem | ActionItem
+interface SearchResultItem {
+  type: 'result'
+  id: string
+  resultType: string
+  label: string
+  subtitle?: string
+  href: string
+  icon: string
+}
+
+type CommandItem = NavItem | ActionItem | SearchResultItem
 
 const NAV_ITEMS: Omit<NavItem, 'type'>[] = [
   { label: 'Dashboard', href: '/dashboard', icon: 'LayoutDashboard', shortcut: 'G D' },
@@ -115,13 +105,36 @@ const NAV_ITEMS: Omit<NavItem, 'type'>[] = [
   { label: 'Settings', href: '/settings', icon: 'Settings' },
 ]
 
+const RESULT_TYPE_ICONS: Record<string, string> = {
+  task: 'CheckSquare',
+  note: 'StickyNote',
+  goal: 'Target',
+  habit: 'FlameKindling',
+  reminder: 'Bell',
+  memory: 'Brain',
+  meeting: 'Calendar',
+  snippet: 'Code2',
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
+}
+
 export function CommandPalette() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([])
+  const [searching, setSearching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const debouncedQuery = useDebounce(query, 300)
 
   const ACTIONS: Omit<ActionItem, 'type'>[] = [
     { label: 'New Task', description: 'Create a new task', icon: 'Plus', action: () => router.push('/tasks?new=1') },
@@ -134,6 +147,34 @@ export function CommandPalette() {
     { label: 'Analyze Image', description: 'Upload image for analysis', icon: 'Eye', action: () => router.push('/visual') },
     { label: 'Export Data', description: 'Download your data', icon: 'Download', action: () => window.open('/api/export?format=json', '_blank') },
   ]
+
+  // Live search from API
+  useEffect(() => {
+    if (!open || debouncedQuery.length < 2) {
+      setSearchResults([])
+      return
+    }
+    let cancelled = false
+    setSearching(true)
+    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}&limit=6`)
+      .then(r => r.ok ? r.json() : { results: [] })
+      .then(data => {
+        if (cancelled) return
+        const results: SearchResultItem[] = (data.results ?? []).map((r: { id: string; type: string; title: string; subtitle?: string; href: string }) => ({
+          type: 'result' as const,
+          id: r.id,
+          resultType: r.type,
+          label: r.title,
+          subtitle: r.subtitle,
+          href: r.href,
+          icon: RESULT_TYPE_ICONS[r.type] ?? 'FileText',
+        }))
+        setSearchResults(results)
+      })
+      .catch(() => { if (!cancelled) setSearchResults([]) })
+      .finally(() => { if (!cancelled) setSearching(false) })
+    return () => { cancelled = true }
+  }, [debouncedQuery, open])
 
   const filteredNavItems = NAV_ITEMS.filter((item) => {
     if (!query) return true
@@ -148,14 +189,21 @@ export function CommandPalette() {
     )
   })
 
-  const allItems: CommandItem[] = [
-    ...filteredNavItems.map((item) => ({ ...item, type: 'nav' as const })),
-    ...filteredActions.map((item) => ({ ...item, type: 'action' as const })),
-  ]
+  // When there's a search query, put search results first
+  const allItems: CommandItem[] = query.length >= 2
+    ? [
+        ...searchResults,
+        ...filteredNavItems.map(i => ({ ...i, type: 'nav' as const })),
+        ...filteredActions.map(i => ({ ...i, type: 'action' as const })),
+      ]
+    : [
+        ...filteredNavItems.map(i => ({ ...i, type: 'nav' as const })),
+        ...filteredActions.map(i => ({ ...i, type: 'action' as const })),
+      ]
 
   const executeItem = useCallback(
     (item: CommandItem) => {
-      if (item.type === 'nav') {
+      if (item.type === 'nav' || item.type === 'result') {
         router.push(item.href)
       } else {
         item.action()
@@ -163,17 +211,29 @@ export function CommandPalette() {
       setOpen(false)
       setQuery('')
       setSelectedIndex(0)
+      setSearchResults([])
     },
     [router]
   )
+
+  // Ask NEXUS: navigate to chat with the query pre-filled
+  const askNexus = useCallback(() => {
+    if (!query.trim()) return
+    router.push(`/chat?q=${encodeURIComponent(query.trim())}`)
+    setOpen(false)
+    setQuery('')
+    setSelectedIndex(0)
+    setSearchResults([])
+  }, [query, router])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setOpen((prev) => !prev)
+        setOpen(prev => !prev)
         setQuery('')
         setSelectedIndex(0)
+        setSearchResults([])
         return
       }
 
@@ -184,47 +244,50 @@ export function CommandPalette() {
         setOpen(false)
         setQuery('')
         setSelectedIndex(0)
+        setSearchResults([])
         return
       }
 
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setSelectedIndex((prev) => (prev + 1) % Math.max(allItems.length, 1))
+        setSelectedIndex(prev => (prev + 1) % Math.max(allItems.length, 1))
         return
       }
 
       if (e.key === 'ArrowUp') {
         e.preventDefault()
-        setSelectedIndex((prev) => (prev - 1 + Math.max(allItems.length, 1)) % Math.max(allItems.length, 1))
+        setSelectedIndex(prev => (prev - 1 + Math.max(allItems.length, 1)) % Math.max(allItems.length, 1))
         return
       }
 
       if (e.key === 'Enter') {
         e.preventDefault()
-        const item = allItems[selectedIndex]
-        if (item) {
-          executeItem(item)
+        // Shift+Enter = ask NEXUS
+        if (e.shiftKey && query.trim()) {
+          askNexus()
+          return
         }
+        const item = allItems[selectedIndex]
+        if (item) executeItem(item)
         return
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, allItems, selectedIndex, executeItem])
+  }, [open, allItems, selectedIndex, executeItem, askNexus, query])
 
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 0)
-    }
+    if (open) setTimeout(() => inputRef.current?.focus(), 0)
   }, [open])
 
   useEffect(() => {
     setSelectedIndex(0)
   }, [query])
 
-  const navOffset = 0
-  const actionsOffset = filteredNavItems.length
+  const searchOffset = 0
+  const navOffset = query.length >= 2 ? searchResults.length : 0
+  const actionsOffset = navOffset + filteredNavItems.length
 
   return (
     <AnimatePresence>
@@ -236,11 +299,7 @@ export function CommandPalette() {
           transition={{ duration: 0.15 }}
           className="fixed inset-0 z-50 flex items-start justify-center pt-[5vh] sm:pt-[15vh] px-4"
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
-          onClick={() => {
-            setOpen(false)
-            setQuery('')
-            setSelectedIndex(0)
-          }}
+          onClick={() => { setOpen(false); setQuery(''); setSelectedIndex(0); setSearchResults([]) }}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -253,29 +312,93 @@ export function CommandPalette() {
               border: '1px solid rgba(0,229,255,0.2)',
               boxShadow: '0 0 60px rgba(0,229,255,0.1), 0 25px 50px rgba(0,0,0,0.8)',
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             {/* Search Input */}
             <div className="flex items-center gap-3 px-4 py-3">
-              <Search size={16} className="text-cyan-400 shrink-0" />
+              {searching
+                ? <Loader2 size={16} className="text-cyan-400 shrink-0 animate-spin" />
+                : <Search size={16} className="text-cyan-400 shrink-0" />
+              }
               <input
                 ref={inputRef}
                 type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search commands, pages, actions..."
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search everything or type a command…"
                 className="flex-1 bg-transparent text-white text-base outline-none placeholder:text-white/30"
               />
+              {query.trim() && (
+                <button
+                  onClick={askNexus}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border border-violet-400/30 bg-violet-400/10 text-violet-400 hover:bg-violet-400/20 transition-all flex-shrink-0"
+                  title="Ask NEXUS AI (Shift+Enter)"
+                >
+                  <Sparkles size={11} />
+                  Ask
+                </button>
+              )}
             </div>
 
             {/* Separator */}
             <div className="h-px bg-white/10" />
 
             {/* Results */}
-            <div ref={listRef} className="overflow-y-auto max-h-[360px] py-2">
+            <div ref={listRef} className="overflow-y-auto max-h-[400px] py-2">
+
+              {/* Live Search Results */}
+              {query.length >= 2 && (
+                <div>
+                  <div className="px-4 py-1.5 flex items-center gap-2">
+                    <span className="text-white/30 text-xs font-medium uppercase tracking-wider">Search Results</span>
+                    {searching && <Loader2 size={10} className="text-white/30 animate-spin" />}
+                  </div>
+                  {searchResults.length > 0 ? searchResults.map((item, idx) => {
+                    const Icon = ICON_MAP[item.icon] ?? FileText
+                    const isSelected = selectedIndex === searchOffset + idx
+                    return (
+                      <motion.button
+                        key={`${item.resultType}-${item.id}`}
+                        initial={{ opacity: 0, x: -4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        className={cn(
+                          'flex items-center gap-3 w-full px-4 py-2.5 rounded-lg transition-all text-left',
+                          isSelected ? 'bg-cyan-400/10 border border-cyan-400/20' : 'hover:bg-white/5'
+                        )}
+                        onClick={() => executeItem(item)}
+                      >
+                        <Icon size={15} className={cn('flex-shrink-0', isSelected ? 'text-cyan-400' : 'text-white/40')} />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-white/90 text-sm block truncate">{item.label}</span>
+                          {item.subtitle && <span className="text-white/35 text-xs block truncate">{item.subtitle}</span>}
+                        </div>
+                        <span className="text-white/20 text-[10px] flex-shrink-0 capitalize">{item.resultType}</span>
+                      </motion.button>
+                    )
+                  }) : !searching ? (
+                    <div className="px-4 py-2 text-white/25 text-xs">No content found for &quot;{query}&quot;</div>
+                  ) : null}
+
+                  {/* Ask NEXUS prompt */}
+                  <motion.button
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg transition-all text-left hover:bg-violet-400/5 border border-transparent hover:border-violet-400/15"
+                    onClick={askNexus}
+                  >
+                    <Sparkles size={15} className="text-violet-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-violet-400/80 text-sm">Ask NEXUS: &ldquo;{query.length > 40 ? query.slice(0, 40) + '…' : query}&rdquo;</span>
+                    </div>
+                    <kbd className="text-white/20 text-[10px] bg-white/5 px-1.5 py-0.5 rounded flex-shrink-0">⇧↵</kbd>
+                  </motion.button>
+                </div>
+              )}
+
               {/* Navigate Group */}
               {filteredNavItems.length > 0 && (
-                <div>
+                <div className={query.length >= 2 ? 'mt-1' : ''}>
                   <div className="px-4 py-1.5">
                     <span className="text-white/30 text-xs font-medium uppercase tracking-wider">Navigate</span>
                   </div>
@@ -287,19 +410,18 @@ export function CommandPalette() {
                         key={item.href}
                         initial={{ opacity: 0, x: -4 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.03 }}
+                        transition={{ delay: idx * 0.02 }}
                         className={cn(
                           'flex items-center gap-3 w-full px-4 py-2.5 rounded-lg transition-all text-left',
                           isSelected ? 'bg-cyan-400/10 border border-cyan-400/20' : 'hover:bg-white/5'
                         )}
                         onClick={() => executeItem({ ...item, type: 'nav' })}
                       >
-                        {Icon && (
-                          <Icon size={15} className={isSelected ? 'text-cyan-400' : 'text-white/40'} />
+                        {Icon && <Icon size={15} className={isSelected ? 'text-cyan-400' : 'text-white/40'} />}
+                        <span className="text-white/90 text-sm flex-1">{item.label}</span>
+                        {item.shortcut && (
+                          <span className="text-white/25 text-[10px] nexus-mono hidden sm:block">{item.shortcut}</span>
                         )}
-                        <div className="flex-1 min-w-0">
-                          <span className="text-white/90 text-sm">{item.label}</span>
-                        </div>
                       </motion.button>
                     )
                   })}
@@ -320,16 +442,14 @@ export function CommandPalette() {
                         key={item.label}
                         initial={{ opacity: 0, x: -4 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: (actionsOffset + idx) * 0.03 }}
+                        transition={{ delay: (actionsOffset + idx) * 0.02 }}
                         className={cn(
                           'flex items-center gap-3 w-full px-4 py-2.5 rounded-lg transition-all text-left',
                           isSelected ? 'bg-cyan-400/10 border border-cyan-400/20' : 'hover:bg-white/5'
                         )}
                         onClick={() => executeItem({ ...item, type: 'action' })}
                       >
-                        {Icon && (
-                          <Icon size={15} className={isSelected ? 'text-cyan-400' : 'text-white/40'} />
-                        )}
+                        {Icon && <Icon size={15} className={isSelected ? 'text-cyan-400' : 'text-white/40'} />}
                         <div className="flex-1 min-w-0">
                           <span className="text-white/90 text-sm">{item.label}</span>
                           {item.description && (
@@ -343,7 +463,7 @@ export function CommandPalette() {
               )}
 
               {/* Empty state */}
-              {allItems.length === 0 && (
+              {allItems.length === 0 && !searching && (
                 <div className="px-4 py-8 text-center text-white/30 text-sm">
                   No results for &quot;{query}&quot;
                 </div>
@@ -352,18 +472,11 @@ export function CommandPalette() {
 
             {/* Footer */}
             <div className="flex items-center gap-4 px-4 py-2 border-t border-white/5 text-white/30 text-xs">
-              <span>
-                <kbd className="bg-white/5 px-1 rounded">↑↓</kbd> Navigate
-              </span>
-              <span>
-                <kbd className="bg-white/5 px-1 rounded">↵</kbd> Open
-              </span>
-              <span>
-                <kbd className="bg-white/5 px-1 rounded">Esc</kbd> Close
-              </span>
-              <span className="ml-auto">
-                <kbd className="bg-white/5 px-1 rounded">⌘K</kbd> Toggle
-              </span>
+              <span><kbd className="bg-white/5 px-1 rounded">↑↓</kbd> Navigate</span>
+              <span><kbd className="bg-white/5 px-1 rounded">↵</kbd> Open</span>
+              <span><kbd className="bg-white/5 px-1 rounded">⇧↵</kbd> Ask NEXUS</span>
+              <span><kbd className="bg-white/5 px-1 rounded">Esc</kbd> Close</span>
+              <span className="ml-auto"><kbd className="bg-white/5 px-1 rounded">⌘K</kbd> Toggle</span>
             </div>
           </motion.div>
         </motion.div>

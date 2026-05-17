@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, Bell, Clock, Check, Trash2, X, AlertCircle, AlarmClock, CheckSquare } from 'lucide-react'
+import { Plus, Bell, Clock, Check, Trash2, X, AlertCircle, AlarmClock, CheckSquare, Sparkles, Loader2 } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -219,6 +219,34 @@ export default function RemindersPage() {
     }
   }
 
+  const [smartScheduling, setSmartScheduling] = useState(false)
+  const [smartReason, setSmartReason] = useState('')
+
+  async function smartSchedule() {
+    if (!form.title.trim()) { toast.error('Enter a title first'); return }
+    setSmartScheduling(true)
+    setSmartReason('')
+    try {
+      const res = await fetch('/api/reminders/smart-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: form.title, description: form.description }),
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      // Convert ISO to datetime-local string
+      const d = new Date(data.suggestedAt)
+      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+      setForm(f => ({ ...f, dueAt: local }))
+      setSmartReason(data.reason ?? '')
+      toast.success('Smart time set!')
+    } catch {
+      toast.error('AI scheduling failed')
+    } finally {
+      setSmartScheduling(false)
+    }
+  }
+
   function getDefaultDueAt() {
     const d = new Date()
     d.setHours(d.getHours() + 1, 0, 0, 0)
@@ -308,14 +336,32 @@ export default function RemindersPage() {
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-white/40 text-xs mb-1 block">When *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-white/40 text-xs">When *</label>
+                      <button
+                        type="button"
+                        onClick={smartSchedule}
+                        disabled={smartScheduling || !form.title.trim()}
+                        className="flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-300 disabled:opacity-30 transition-colors"
+                        title="AI Smart Schedule"
+                      >
+                        {smartScheduling ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                        Smart time
+                      </button>
+                    </div>
                     <input
                       type="datetime-local"
                       value={form.dueAt}
-                      onChange={e => setForm(f => ({ ...f, dueAt: e.target.value }))}
+                      onChange={e => { setForm(f => ({ ...f, dueAt: e.target.value })); setSmartReason('') }}
                       required
                       className="nexus-input"
                     />
+                    {smartReason && (
+                      <p className="text-violet-400/70 text-[10px] mt-1 flex items-center gap-1">
+                        <Sparkles size={9} />
+                        {smartReason}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="text-white/40 text-xs mb-1 block">Priority</label>
