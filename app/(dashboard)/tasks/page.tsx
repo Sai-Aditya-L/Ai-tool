@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight, RefreshCw, Sparkles, Loader2 } from 'lucide-react'
+import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight, RefreshCw, Sparkles, Loader2, Zap } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -462,6 +462,9 @@ export default function TasksPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [decomposing, setDecomposing] = useState(false)
   const [suggestedSubtasks, setSuggestedSubtasks] = useState<string[]>([])
+  const [suggestions, setSuggestions] = useState<Array<{ title: string; reason: string; priority: string; category: string }>>([])
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   useEffect(() => { document.title = 'Tasks | NEXUS' }, [])
 
@@ -499,6 +502,37 @@ export default function TasksPage() {
       toast.error('AI decompose failed')
     } finally {
       setDecomposing(false)
+    }
+  }
+
+  async function loadSuggestions() {
+    setSuggestionsLoading(true)
+    setShowSuggestions(true)
+    try {
+      const res = await fetch('/api/tasks/suggestions')
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setSuggestions(data.suggestions ?? [])
+    } catch {
+      toast.error('Failed to load suggestions')
+    } finally {
+      setSuggestionsLoading(false)
+    }
+  }
+
+  async function addSuggestion(title: string, priority: string) {
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, priority }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Task added!')
+      setSuggestions(prev => prev.filter(s => s.title !== title))
+      fetchTasks()
+    } catch {
+      toast.error('Failed to add task')
     }
   }
 
@@ -664,6 +698,15 @@ export default function TasksPage() {
               <CheckSquare size={14} />
               Select
             </button>
+            <button
+              onClick={loadSuggestions}
+              disabled={suggestionsLoading}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-amber-400/25 bg-amber-400/5 text-amber-400 hover:bg-amber-400/12 transition-all disabled:opacity-40"
+              title="NEXUS AI task suggestions"
+            >
+              {suggestionsLoading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+              Suggest
+            </button>
 
             {/* Status filter */}
             <div className="flex gap-1">
@@ -706,6 +749,64 @@ export default function TasksPage() {
               <option value="no_date">No Due Date</option>
             </select>
           </div>
+
+          {/* NEXUS AI Suggestions panel */}
+          {showSuggestions && (
+            <div className="rounded-2xl border border-amber-400/15 bg-amber-400/3 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap size={13} className="text-amber-400" />
+                  <span className="text-white/60 text-sm font-medium">NEXUS Suggests for Today</span>
+                </div>
+                <button
+                  onClick={() => setShowSuggestions(false)}
+                  className="text-white/25 hover:text-white/50 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {suggestionsLoading ? (
+                <div className="flex items-center gap-2 text-white/30 text-sm">
+                  <Loader2 size={14} className="animate-spin text-amber-400" />
+                  Analyzing your tasks, goals, and schedule…
+                </div>
+              ) : suggestions.length === 0 ? (
+                <p className="text-white/30 text-sm">No suggestions right now. Great job staying on top of things!</p>
+              ) : (
+                <div className="space-y-2">
+                  {suggestions.map((s, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-white/3 border border-white/6 hover:border-amber-400/20 transition-all group">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-white/85 text-sm font-medium truncate">{s.title}</span>
+                          <span className={cn(
+                            'text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0',
+                            s.priority === 'urgent' ? 'text-red-400 border-red-400/30 bg-red-400/10' :
+                            s.priority === 'high' ? 'text-orange-400 border-orange-400/30 bg-orange-400/10' :
+                            'text-yellow-400 border-yellow-400/30 bg-yellow-400/10'
+                          )}>
+                            {s.priority}
+                          </span>
+                          <span className="text-[10px] text-white/30 border border-white/10 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                            {s.category}
+                          </span>
+                        </div>
+                        <p className="text-white/40 text-xs">{s.reason}</p>
+                      </div>
+                      <button
+                        onClick={() => addSuggestion(s.title, s.priority)}
+                        className="flex-shrink-0 w-7 h-7 rounded-lg border border-amber-400/30 bg-amber-400/10 text-amber-400 flex items-center justify-center hover:bg-amber-400/20 transition-all opacity-0 group-hover:opacity-100"
+                        title="Add as task"
+                      >
+                        <Plus size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Create form */}
           {showForm && (

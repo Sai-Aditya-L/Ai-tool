@@ -17,6 +17,49 @@ import Anthropic from '@anthropic-ai/sdk'
 import { orchestrate } from '@/lib/orchestrator'
 
 // ---------------------------------------------------------------------------
+// Auto-memory extraction: extract key user facts from conversation turns
+// ---------------------------------------------------------------------------
+async function extractAndSaveMemory(userId: string, userMsg: string, assistantMsg: string) {
+  const prompt = `Extract any important personal facts, preferences, or context about the USER from this conversation. Only extract things that would be useful to remember long-term.
+User said: "${userMsg.slice(0, 500)}"
+
+Return JSON: {"facts": [{"key": "short_key", "value": "the fact", "category": "preference|personal|work|health|location|other"}]}
+Or {"facts": []} if nothing worth remembering. Max 3 facts. Only extract clear, specific facts.`
+
+  const res = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 200,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const raw = res.content.find(b => b.type === 'text')?.text ?? '{}'
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) return
+
+  const parsed = JSON.parse(match[0]) as { facts?: Array<{ key: string; value: string; category: string }> }
+  if (!parsed.facts?.length) return
+
+  for (const fact of parsed.facts.slice(0, 3)) {
+    if (!fact.key || !fact.value) continue
+    const memKey = fact.key.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 64)
+    await prisma.memory.upsert({
+      where: { userId_key: { userId, key: memKey } },
+      create: {
+        userId,
+        category: fact.category || 'user_fact',
+        key: memKey,
+        value: fact.value.slice(0, 500),
+        source: 'chat_extraction',
+      },
+      update: {
+        value: fact.value.slice(0, 500),
+        updatedAt: new Date(),
+      },
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Orchestration helper — calls orchestrate logic directly (no HTTP round-trip)
 // ---------------------------------------------------------------------------
 async function detectOrchestration(query: string, userId: string) {
@@ -929,6 +972,12 @@ export async function POST(req: NextRequest) {
           details: `NEXUS executed: ${toolCallsLog.map(t => t.name).join(', ')}`,
         },
       })
+    }
+
+    // Fire-and-forget: extract user facts from conversation and save to memory
+    const lastUserText = messages[messages.length - 1]?.text || messages[messages.length - 1]?.content || ''
+    if (lastUserText.length > 20) {
+      extractAndSaveMemory(user.id, lastUserText, assistantMessage).catch(() => {})
     }
 
     return NextResponse.json({
