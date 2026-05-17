@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/header'
-import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight, RefreshCw, Sparkles, Loader2 } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -460,6 +460,8 @@ export default function TasksPage() {
   const [form, setForm] = useState({ title: '', description: '', priority: 'medium', dueDate: '', tags: '', isRecurring: false, recurringSchedule: 'daily' })
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [decomposing, setDecomposing] = useState(false)
+  const [suggestedSubtasks, setSuggestedSubtasks] = useState<string[]>([])
 
   useEffect(() => { document.title = 'Tasks | NEXUS' }, [])
 
@@ -481,6 +483,25 @@ export default function TasksPage() {
     }
   }
 
+  async function decomposeTask() {
+    if (!form.title.trim()) return
+    setDecomposing(true)
+    setSuggestedSubtasks([])
+    try {
+      const res = await fetch('/api/tasks/decompose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: form.title, description: form.description, priority: form.priority }),
+      })
+      const data = await res.json()
+      setSuggestedSubtasks(data.subtasks ?? [])
+    } catch {
+      toast.error('AI decompose failed')
+    } finally {
+      setDecomposing(false)
+    }
+  }
+
   async function createTask(e: React.FormEvent) {
     e.preventDefault()
     if (!form.title.trim()) return
@@ -491,8 +512,25 @@ export default function TasksPage() {
         body: JSON.stringify(form),
       })
       if (!res.ok) throw new Error()
+      const data = await res.json()
+      const parentId = data.task?.id
+
+      // Auto-create suggested subtasks
+      if (parentId && suggestedSubtasks.length > 0) {
+        await Promise.all(
+          suggestedSubtasks.map(title =>
+            fetch('/api/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title, parentId, priority: 'medium' }),
+            }).catch(() => {})
+          )
+        )
+      }
+
       toast.success('Task created')
       setForm({ title: '', description: '', priority: 'medium', dueDate: '', tags: '', isRecurring: false, recurringSchedule: 'daily' })
+      setSuggestedSubtasks([])
       setShowForm(false)
       fetchTasks()
     } catch {
@@ -677,15 +715,27 @@ export default function TasksPage() {
                 New Task
               </h3>
               <form onSubmit={createTask} className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Task title *"
-                  value={form.title}
-                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  required
-                  className="nexus-input"
-                  autoFocus
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Task title *"
+                    value={form.title}
+                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    required
+                    className="nexus-input flex-1"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={decomposeTask}
+                    disabled={!form.title.trim() || decomposing}
+                    title="AI: Break into subtasks"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-400/25 bg-violet-400/5 text-violet-400 text-xs hover:bg-violet-400/12 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                  >
+                    {decomposing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                    <span className="hidden sm:inline">AI</span>
+                  </button>
+                </div>
                 <textarea
                   placeholder="Description (optional)"
                   value={form.description}
@@ -693,6 +743,33 @@ export default function TasksPage() {
                   rows={2}
                   className="nexus-input resize-none"
                 />
+                {/* AI suggested subtasks */}
+                {suggestedSubtasks.length > 0 && (
+                  <div className="p-3 rounded-lg border border-violet-400/15 bg-violet-400/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-violet-400 text-xs font-medium flex items-center gap-1.5">
+                        <Sparkles size={11} />
+                        NEXUS suggested {suggestedSubtasks.length} subtasks
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSuggestedSubtasks([])}
+                        className="text-white/25 hover:text-white/50 text-xs"
+                      >
+                        ✕ clear
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {suggestedSubtasks.map((st, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs text-white/60">
+                          <span className="text-violet-400/50">→</span>
+                          {st}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-white/25 text-[10px] mt-2">These will be created as subtasks automatically</p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <select
                     value={form.priority}
