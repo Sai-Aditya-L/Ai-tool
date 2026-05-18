@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { Header } from '@/components/layout/header'
-import { Code2, Plus, Search, Pin, Trash2, Copy, Tag, Check, X } from 'lucide-react'
+import { Code2, Plus, Search, Pin, Trash2, Copy, Tag, Check, X, Sparkles, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -191,7 +191,34 @@ interface SnippetCardProps {
 function SnippetCard({ snippet, onPin, onDelete, onCopy }: SnippetCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [aiResult, setAiResult] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiAction, setAiAction] = useState<'explain' | 'optimize' | null>(null)
   const tags = snippet.tags ? snippet.tags.split(',').map(t => t.trim()).filter(Boolean) : []
+
+  async function runAI(action: 'explain' | 'optimize', e: React.MouseEvent) {
+    e.stopPropagation()
+    setAiAction(action)
+    setAiLoading(true)
+    setAiResult('')
+    if (!expanded) setExpanded(true)
+    try {
+      const prompt = action === 'explain'
+        ? `Explain this ${snippet.language} code concisely in plain English. Describe what it does, key concepts, and any gotchas:\n\n\`\`\`${snippet.language.toLowerCase()}\n${snippet.code}\n\`\`\``
+        : `Optimize this ${snippet.language} code for performance, readability, and best practices. Return the improved code with a brief explanation of changes:\n\n\`\`\`${snippet.language.toLowerCase()}\n${snippet.code}\n\`\`\``
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+      })
+      const data = await res.json()
+      setAiResult(data.message ?? data.content ?? 'No response')
+    } catch {
+      setAiResult('AI request failed')
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   function handleCopy(e: React.MouseEvent) {
     e.stopPropagation()
@@ -263,6 +290,24 @@ function SnippetCard({ snippet, onPin, onDelete, onCopy }: SnippetCardProps) {
             >
               <Trash2 size={13} />
             </button>
+            <button
+              onClick={e => runAI('explain', e)}
+              disabled={aiLoading}
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border border-violet-400/20 bg-violet-400/8 text-violet-400/70 hover:text-violet-400 hover:bg-violet-400/15 transition-all disabled:opacity-30"
+              title="AI Explain"
+            >
+              {aiLoading && aiAction === 'explain' ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+              Explain
+            </button>
+            <button
+              onClick={e => runAI('optimize', e)}
+              disabled={aiLoading}
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border border-cyan-400/20 bg-cyan-400/8 text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-400/15 transition-all disabled:opacity-30"
+              title="AI Optimize"
+            >
+              {aiLoading && aiAction === 'optimize' ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+              Optimize
+            </button>
           </div>
         </div>
 
@@ -293,14 +338,41 @@ function SnippetCard({ snippet, onPin, onDelete, onCopy }: SnippetCardProps) {
         </pre>
 
         {expanded && (
-          <div className="mt-3 flex justify-end">
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 text-xs text-cyan-400/60 hover:text-cyan-400 transition-colors nexus-btn-secondary py-1.5 px-3"
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? 'Copied!' : 'Copy All'}
-            </button>
+          <div className="mt-3 space-y-3">
+            <div className="flex justify-end">
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1.5 text-xs text-cyan-400/60 hover:text-cyan-400 transition-colors nexus-btn-secondary py-1.5 px-3"
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? 'Copied!' : 'Copy All'}
+              </button>
+            </div>
+            {(aiLoading || aiResult) && (
+              <div className="rounded-lg border border-violet-400/15 bg-violet-400/5 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  {aiLoading ? <Loader2 size={11} className="animate-spin text-violet-400" /> : <Sparkles size={11} className="text-violet-400" />}
+                  <span className="text-violet-400/70 text-[10px] font-medium uppercase tracking-wider">
+                    {aiAction === 'explain' ? 'Explanation' : 'Optimized Code'}
+                  </span>
+                  {aiResult && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setAiResult(''); setAiAction(null) }}
+                      className="ml-auto text-white/25 hover:text-white/50 transition-colors"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+                {aiLoading ? (
+                  <div className="space-y-1.5">
+                    {[80, 65, 72].map((w, i) => <div key={i} className="h-2 bg-white/8 rounded animate-pulse" style={{ width: `${w}%` }} />)}
+                  </div>
+                ) : (
+                  <pre className="text-white/65 text-xs leading-relaxed whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">{aiResult}</pre>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
