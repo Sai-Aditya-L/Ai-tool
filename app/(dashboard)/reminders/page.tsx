@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Header } from '@/components/layout/header'
 import { Plus, Bell, Clock, Check, Trash2, X, AlertCircle, AlarmClock, CheckSquare, Sparkles, Loader2 } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
@@ -92,7 +93,14 @@ export default function RemindersPage() {
     recurrenceRule: '',
   })
 
+  const searchParams = useSearchParams()
   useEffect(() => { fetchReminders() }, [statusFilter])
+  useEffect(() => {
+    if (searchParams?.get('new') === '1') {
+      setShowForm(true)
+      setForm(f => ({ ...f, dueAt: getDefaultDueAt() }))
+    }
+  }, [searchParams])
 
   async function fetchReminders() {
     setLoading(true)

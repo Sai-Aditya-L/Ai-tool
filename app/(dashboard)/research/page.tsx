@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Header } from '@/components/layout/header'
-import { Search, BookOpen, FileText, GitCompare, AlignLeft, Loader2, Download, Save, ChevronRight } from 'lucide-react'
+import { Search, BookOpen, FileText, GitCompare, AlignLeft, Loader2, Download, Save, ChevronRight, Copy, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type ResearchMode = 'search' | 'wiki' | 'document' | 'compare' | 'summarize'
@@ -35,6 +35,7 @@ export default function ResearchPage() {
   const [rawSearchResults, setRawSearchResults] = useState<SearchResult[] | null>(null)
   const [wikiResult, setWikiResult] = useState<WikiResult | null>(null)
   const [savingNote, setSavingNote] = useState(false)
+  const [searchHistory, setSearchHistory] = useState<string[]>([])
 
   // Input states per mode
   const [searchQuery, setSearchQuery] = useState('')
@@ -72,6 +73,10 @@ export default function ResearchPage() {
         const data = await res.json()
         setRawSearchResults(data.results || [])
         setResults('search')
+        setSearchHistory(prev => {
+          const updated = [searchQuery, ...prev.filter(q => q !== searchQuery)]
+          return updated.slice(0, 5)
+        })
       }
 
       else if (mode === 'wiki') {
@@ -165,6 +170,24 @@ export default function ResearchPage() {
     a.download = `nexus-research-${Date.now()}.txt`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function copyResults() {
+    let text = ''
+    if (mode === 'search' && rawSearchResults) {
+      text = `Web Search: ${searchQuery}\n\n` +
+        rawSearchResults.map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n')
+    } else if (mode === 'wiki' && wikiResult) {
+      text = `Wikipedia: ${wikiResult.title}\n\n${wikiResult.summary}\n\nSource: ${wikiResult.url}`
+    } else if (results) {
+      text = results
+    }
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Copied to clipboard')
+    } catch {
+      toast.error('Failed to copy')
+    }
   }
 
   const hasResults = results !== null
@@ -295,6 +318,27 @@ export default function ResearchPage() {
               </>
             )}
           </button>
+
+          {/* Search History */}
+          {searchHistory.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Clock size={10} className="text-white/30" />
+                <div className="text-[10px] text-white/30 nexus-mono tracking-widest">RECENT SEARCHES</div>
+              </div>
+              <div className="space-y-1">
+                {searchHistory.map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setMode('search'); setSearchQuery(q) }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-white/45 hover:text-white/70 hover:bg-white/5 transition-colors nexus-mono truncate"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right panel: results */}
@@ -310,6 +354,13 @@ export default function ResearchPage() {
               >
                 <Save size={11} />
                 {savingNote ? 'Saving...' : 'Save to Notes'}
+              </button>
+              <button
+                onClick={copyResults}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 text-xs nexus-mono transition-all"
+              >
+                <Copy size={11} />
+                Copy
               </button>
               <button
                 onClick={exportResults}

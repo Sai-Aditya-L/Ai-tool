@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Header } from '@/components/layout/header'
 import { Plus, CheckSquare, Clock, Tag, Trash2, Check, Edit2, X, ChevronDown, ChevronRight, RefreshCw, Sparkles, Loader2, Zap } from 'lucide-react'
 import { cn, formatDate, getPriorityColor } from '@/lib/utils'
@@ -466,7 +467,9 @@ export default function TasksPage() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
 
+  const searchParams = useSearchParams()
   useEffect(() => { document.title = 'Tasks | NEXUS' }, [])
+  useEffect(() => { if (searchParams?.get('new') === '1') setShowForm(true) }, [searchParams])
 
   useEffect(() => { fetchTasks() }, [filter])
 

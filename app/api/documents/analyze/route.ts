@@ -32,5 +32,13 @@ export async function POST(req: NextRequest) {
 
   const analysis = response.content.find(b => b.type === 'text')?.text ?? 'Analysis unavailable.'
 
+  // Update matching UserFile record with analysis (fire-and-forget)
+  if (filename) {
+    prisma.userFile.updateMany({
+      where: { userId: user.id, originalName: filename },
+      data: { analysis: analysis.slice(0, 10000) },
+    }).catch(() => {})
+  }
+
   return NextResponse.json({ analysis, filename, model: 'claude-sonnet-4-6' })
 }

@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/header'
 import {
   Gauge, Play, Loader2, AlertTriangle, Calendar, Bot, Bell,
   CheckCircle, ChevronRight, RefreshCw, Lightbulb, Zap, Brain,
-  Info, Target,
+  Info, Target, Save, ShieldAlert,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -29,6 +29,7 @@ interface SimulationResult {
   confidence: 'high' | 'medium' | 'low'
   type: string
   recommendation?: string
+  riskFactors?: string[]
 }
 
 interface ProactiveAlert {
@@ -81,6 +82,7 @@ export default function SimulatePage() {
   const [alerts, setAlerts] = useState<ProactiveAlert[]>([])
   const [alertsLoading, setAlertsLoading] = useState(true)
   const [refreshingInsights, setRefreshingInsights] = useState(false)
+  const [savingNote, setSavingNote] = useState(false)
 
   const fetchWorldState = async () => {
     try {
@@ -119,6 +121,45 @@ export default function SimulatePage() {
       toast.error('Failed to refresh insights')
     }
     setRefreshingInsights(false)
+  }
+
+  const saveSimulationAsNote = async () => {
+    if (!result) return
+    setSavingNote(true)
+    try {
+      const lines: string[] = []
+      lines.push(`**Query:** ${query}`)
+      lines.push('')
+      lines.push(result.result)
+      if (result.recommendation) {
+        lines.push('')
+        lines.push(`**Recommendation:** ${result.recommendation}`)
+      }
+      if (result.assumptions?.length) {
+        lines.push('')
+        lines.push('**Assumptions:**')
+        result.assumptions.forEach(a => lines.push(`- ${a}`))
+      }
+      if (result.riskFactors?.length) {
+        lines.push('')
+        lines.push('**Risk Factors:**')
+        result.riskFactors.forEach(r => lines.push(`- ${r}`))
+      }
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Simulation: ${query.slice(0, 60)}`,
+          content: lines.join('\n'),
+          tags: 'simulation',
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      toast.success('Simulation saved to Notes')
+    } catch {
+      toast.error('Failed to save note')
+    }
+    setSavingNote(false)
   }
 
   const runSimulation = async () => {
@@ -432,6 +473,14 @@ export default function SimulatePage() {
                     {result.type}
                   </span>
                 )}
+                <button
+                  onClick={saveSimulationAsNote}
+                  disabled={savingNote}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-cyan-400/20 text-cyan-400/70 hover:text-cyan-400 hover:border-cyan-400/40 transition-all disabled:opacity-40 nexus-mono"
+                >
+                  <Save size={11} />
+                  {savingNote ? 'Saving...' : 'Save as Note'}
+                </button>
               </div>
 
               {/* Result text */}
@@ -464,6 +513,24 @@ export default function SimulatePage() {
                       >
                         {assumption}
                       </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Risk Factors */}
+              {result.riskFactors && result.riskFactors.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <ShieldAlert size={12} className="text-red-400/70" />
+                    <div className="hud-label" style={{ color: 'rgba(248,113,113,0.7)' }}>RISK FACTORS</div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {result.riskFactors.map((risk, idx) => (
+                      <div key={idx} className="flex items-start gap-2 text-xs text-white/50">
+                        <span className="text-red-400/60 mt-0.5 flex-shrink-0">•</span>
+                        <span>{risk}</span>
+                      </div>
                     ))}
                   </div>
                 </div>

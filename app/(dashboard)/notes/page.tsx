@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Header } from '@/components/layout/header'
 import { Plus, StickyNote, Pin, PinOff, Trash2, X, Search, Edit3, Save, Eye, CheckSquare, Check, Sparkles, Loader2, Tag } from 'lucide-react'
 import { cn, formatRelativeTime, parseTags } from '@/lib/utils'
@@ -143,7 +144,9 @@ export default function NotesPage() {
   const [aiAction, setAiAction] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
 
+  const searchParams = useSearchParams()
   useEffect(() => { fetchNotes() }, [search])
+  useEffect(() => { if (searchParams?.get('new') === '1') setShowForm(true) }, [searchParams])
 
   // Reset preview mode when form closes or a different note is opened
   useEffect(() => {

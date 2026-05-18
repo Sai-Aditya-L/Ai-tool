@@ -109,11 +109,12 @@ WORLD STATE SUMMARY (as of ${worldState.currentTime}):
 Given the world state context provided and the user's query, produce a simulation result.
 Respond with JSON only:
 {
-  "type": "schedule|workload|deadline|travel|budget|comparison",
-  "result": "clear explanation of the simulation result",
+  "type": "schedule|workload|deadline|travel|budget|comparison|general",
+  "result": "clear explanation of the simulation result (2-4 paragraphs)",
   "assumptions": ["assumption 1", "assumption 2"],
   "confidence": "high|medium|low",
-  "recommendation": "specific actionable recommendation"
+  "recommendation": "specific actionable recommendation",
+  "riskFactors": ["risk 1", "risk 2"]
 }`,
     messages: [
       {
@@ -131,6 +132,7 @@ Respond with JSON only:
     assumptions: string[]
     confidence: 'high' | 'medium' | 'low'
     recommendation: string
+    riskFactors: string[]
   }
 
   try {
@@ -144,6 +146,7 @@ Respond with JSON only:
       assumptions: ['Simulation based on current world state data'],
       confidence: 'medium',
       recommendation: 'Review your current tasks and calendar for accurate planning.',
+      riskFactors: [],
     }
   }
 
@@ -153,5 +156,6 @@ Respond with JSON only:
     confidence: parsed.confidence || 'medium',
     type: parsed.type || 'general',
     recommendation: parsed.recommendation || '',
+    riskFactors: parsed.riskFactors || [],
   })
 }

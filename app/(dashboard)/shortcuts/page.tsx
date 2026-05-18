@@ -1,367 +1,369 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Header } from '@/components/layout/header'
-import { Zap, Plus, Trash2, Play, BookOpen, Clock, Loader2 } from 'lucide-react'
+import { Zap, Plus, Trash2, Play, Clock, Loader2, Sparkles, Copy, Check, Edit2, X, BookOpen } from 'lucide-react'
+import toast from 'react-hot-toast'
 
-interface NLShortcut {
+interface Shortcut {
   id: string
   trigger: string
   expansion: string
-  description: string
+  description?: string
   useCount: number
   createdAt: string
 }
 
-const LS_KEY = 'nexus_nl_shortcuts'
-
 const BUILTIN_SHORTCUTS = [
-  {
-    trigger: 'morning briefing',
-    expansion: 'Opens daily summary and lists today\'s tasks, calendar events, and priority items.',
-    description: 'Start your day with a full overview',
-  },
-  {
-    trigger: 'focus mode',
-    expansion: 'Sets Do Not Disturb, creates a focus task with a timer, and logs the start time.',
-    description: 'Enter deep work mode',
-  },
-  {
-    trigger: 'end of day',
-    expansion: 'Summarizes what was done today, lists incomplete tasks, and previews tomorrow\'s schedule.',
-    description: 'Wind down and review progress',
-  },
-  {
-    trigger: 'security check',
-    expansion: 'Runs Sentinel agent scan: checks for anomalies, reviews recent activity, and reports threats.',
-    description: 'Audit system security status',
-  },
+  { trigger: 'morning briefing', expansion: 'Give me a full morning briefing: today\'s tasks, calendar events, reminders, weather, and top priorities.', description: 'Start your day with a full overview' },
+  { trigger: 'focus mode', expansion: 'Help me enter deep focus mode. Suggest the most important task to work on right now and start a 25-minute Pomodoro timer.', description: 'Enter deep work mode' },
+  { trigger: 'end of day', expansion: 'Summarize what I accomplished today, list any incomplete tasks, and preview tomorrow\'s schedule.', description: 'Wind down and review progress' },
+  { trigger: 'security check', expansion: 'Run a security audit: check for anomalies in recent activity, review my agent runs, and report any threats or unusual patterns.', description: 'Audit system security status' },
+  { trigger: 'weekly review', expansion: 'Give me a comprehensive weekly review: tasks completed, goals progress, habit streaks, and recommendations for next week.', description: 'Weekly progress summary' },
+  { trigger: 'brain dump', expansion: 'I want to do a brain dump. I\'ll list everything on my mind and you help me organize it into tasks, reminders, and notes.', description: 'Clear your head into organized items' },
 ]
 
-function loadShortcuts(): NLShortcut[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = localStorage.getItem(LS_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function saveShortcuts(shortcuts: NLShortcut[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(LS_KEY, JSON.stringify(shortcuts))
-}
-
 function timeAgo(isoString: string): string {
-  const date = new Date(isoString)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
+  const diff = Date.now() - new Date(isoString).getTime()
   const minutes = Math.floor(diff / 60_000)
-  const hours = Math.floor(diff / 3_600_000)
-  const days = Math.floor(diff / 86_400_000)
-  if (minutes < 1) return 'just now'
   if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours}h ago`
-  return `${days}d ago`
+  return `${Math.floor(hours / 24)}d ago`
 }
 
 export default function ShortcutsPage() {
-  const [shortcuts, setShortcuts] = useState<NLShortcut[]>([])
-  const [trigger, setTrigger] = useState('')
-  const [expansion, setExpansion] = useState('')
-  const [description, setDescription] = useState('')
-  const [testing, setTesting] = useState<string | null>(null)
-  const [testResults, setTestResults] = useState<Record<string, string>>({})
-  const [lastUsedId, setLastUsedId] = useState<string | null>(null)
+  const [shortcuts, setShortcuts] = useState<Shortcut[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState({ trigger: '', expansion: '', description: '' })
+  const [submitting, setSubmitting] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [aiSuggesting, setAiSuggesting] = useState(false)
 
-  useEffect(() => {
-    setShortcuts(loadShortcuts())
+  const loadShortcuts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/shortcuts')
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setShortcuts(data.shortcuts ?? [])
+    } catch {
+      toast.error('Failed to load shortcuts')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  function handleAdd(e: React.FormEvent) {
+  useEffect(() => { loadShortcuts() }, [loadShortcuts])
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!trigger.trim() || !expansion.trim()) return
-    const newShortcut: NLShortcut = {
-      id: `sc_${Date.now()}`,
-      trigger: trigger.trim().toLowerCase(),
-      expansion: expansion.trim(),
-      description: description.trim(),
-      useCount: 0,
-      createdAt: new Date().toISOString(),
+    if (!form.trigger.trim() || !form.expansion.trim()) return
+    setSubmitting(true)
+    try {
+      if (editingId) {
+        const res = await fetch(`/api/shortcuts/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        })
+        if (!res.ok) throw new Error()
+        toast.success('Shortcut updated')
+      } else {
+        const res = await fetch('/api/shortcuts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        })
+        if (!res.ok) throw new Error()
+        toast.success('Shortcut saved!')
+      }
+      setForm({ trigger: '', expansion: '', description: '' })
+      setShowForm(false)
+      setEditingId(null)
+      loadShortcuts()
+    } catch {
+      toast.error('Failed to save shortcut')
+    } finally {
+      setSubmitting(false)
     }
-    const updated = [newShortcut, ...shortcuts]
-    setShortcuts(updated)
-    saveShortcuts(updated)
-    setTrigger('')
-    setExpansion('')
-    setDescription('')
   }
 
-  function handleDelete(id: string) {
-    const updated = shortcuts.filter(s => s.id !== id)
-    setShortcuts(updated)
-    saveShortcuts(updated)
-    setTestResults(prev => {
-      const next = { ...prev }
-      delete next[id]
-      return next
-    })
-    if (lastUsedId === id) setLastUsedId(null)
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this shortcut?')) return
+    setDeletingId(id)
+    try {
+      await fetch(`/api/shortcuts/${id}`, { method: 'DELETE' })
+      setShortcuts(prev => prev.filter(s => s.id !== id))
+      toast.success('Shortcut deleted')
+    } catch {
+      toast.error('Failed to delete shortcut')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
-  async function handleTest(shortcut: NLShortcut) {
-    setTesting(shortcut.id)
-    setTestResults(prev => ({ ...prev, [shortcut.id]: '' }))
-
+  async function handleRun(shortcut: Shortcut) {
     // Increment use count
-    const updated = shortcuts.map(s =>
-      s.id === shortcut.id ? { ...s, useCount: s.useCount + 1 } : s
-    )
-    setShortcuts(updated)
-    saveShortcuts(updated)
-    setLastUsedId(shortcut.id)
+    await fetch(`/api/shortcuts/${shortcut.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ increment: true }),
+    }).catch(() => {})
+    setShortcuts(prev => prev.map(s => s.id === shortcut.id ? { ...s, useCount: s.useCount + 1 } : s))
+    // Navigate to chat with the expansion pre-filled
+    window.location.href = `/chat?q=${encodeURIComponent(shortcut.expansion)}`
+  }
 
+  async function handleCopy(text: string, id: string) {
+    await navigator.clipboard.writeText(text).catch(() => {})
+    setCopied(id)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  function startEdit(s: Shortcut) {
+    setForm({ trigger: s.trigger, expansion: s.expansion, description: s.description ?? '' })
+    setEditingId(s.id)
+    setShowForm(true)
+  }
+
+  async function addBuiltin(b: typeof BUILTIN_SHORTCUTS[0]) {
+    try {
+      const res = await fetch('/api/shortcuts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(b),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(`"${b.trigger}" added!`)
+      loadShortcuts()
+    } catch {
+      toast.error('Failed to add shortcut')
+    }
+  }
+
+  async function suggestExpansion() {
+    if (!form.trigger.trim()) { toast.error('Enter a trigger phrase first'); return }
+    setAiSuggesting(true)
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{ role: 'user', content: shortcut.trigger }],
+          messages: [{ role: 'user', content: `Write a clear, natural language expansion for this shortcut trigger phrase: "${form.trigger}". The expansion should be a prompt that a user would send to their AI personal assistant. Keep it under 150 words. Return only the expansion text, no labels or prefixes.` }],
         }),
       })
-      if (!res.ok) {
-        setTestResults(prev => ({ ...prev, [shortcut.id]: `Error ${res.status}: ${res.statusText}` }))
-        return
+      const data = await res.json()
+      const text = data.message ?? data.content ?? ''
+      if (text) {
+        setForm(f => ({ ...f, expansion: text }))
+        toast.success('AI expansion generated!')
       }
-
-      // Handle streaming response
-      const reader = res.body?.getReader()
-      if (!reader) {
-        setTestResults(prev => ({ ...prev, [shortcut.id]: 'No response body' }))
-        return
-      }
-
-      const decoder = new TextDecoder()
-      let accumulated = ''
-      while (accumulated.length < 200) {
-        const { done, value } = await reader.read()
-        if (done) break
-        accumulated += decoder.decode(value, { stream: true })
-      }
-      reader.cancel()
-
-      // Strip any SSE formatting if present
-      const clean = accumulated
-        .split('\n')
-        .filter(line => line.startsWith('data: '))
-        .map(line => {
-          try { return JSON.parse(line.slice(6))?.content ?? '' } catch { return '' }
-        })
-        .join('')
-        || accumulated
-
-      setTestResults(prev => ({
-        ...prev,
-        [shortcut.id]: clean.slice(0, 200) + (clean.length > 200 ? '…' : ''),
-      }))
     } catch {
-      setTestResults(prev => ({ ...prev, [shortcut.id]: 'Network error' }))
+      toast.error('AI suggestion failed')
     } finally {
-      setTesting(null)
+      setAiSuggesting(false)
     }
   }
 
-  // Stats
-  const totalShortcuts = shortcuts.length
-  const mostUsed = shortcuts.reduce<NLShortcut | null>(
-    (best, s) => (!best || s.useCount > best.useCount ? s : best),
-    null
-  )
-  const lastUsed = lastUsedId ? shortcuts.find(s => s.id === lastUsedId) : null
+  // Builtins not yet saved by user
+  const existingTriggers = new Set(shortcuts.map(s => s.trigger))
+  const availableBuiltins = BUILTIN_SHORTCUTS.filter(b => !existingTriggers.has(b.trigger))
 
   return (
-    <div
-      className="flex flex-col h-full overflow-hidden"
-      style={{ background: 'rgba(0,4,12,0.97)' }}
-    >
-      <Header title="Command Shortcuts" subtitle="Define natural language shortcuts NEXUS will recognize" />
+    <div className="flex flex-col h-full overflow-hidden">
+      <Header title="Shortcuts" subtitle={`${shortcuts.length} custom NL shortcuts`} />
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-5">
 
-          {/* Stats bar */}
-          <div className="flex flex-wrap items-center gap-4 px-1">
-            <div className="flex items-center gap-2 text-xs text-white/40">
-              <Zap size={12} className="text-cyan-400" />
-              <span>Total shortcuts: <span className="text-white/70">{totalShortcuts}</span></span>
-            </div>
-            {mostUsed && mostUsed.useCount > 0 && (
-              <div className="flex items-center gap-2 text-xs text-white/40">
-                <BookOpen size={12} className="text-cyan-400" />
-                <span>Most used: <span className="text-cyan-400 font-mono">{mostUsed.trigger}</span> ({mostUsed.useCount}x)</span>
-              </div>
-            )}
-            {lastUsed && (
-              <div className="flex items-center gap-2 text-xs text-white/40">
-                <Clock size={12} className="text-cyan-400" />
-                <span>Last used: <span className="text-white/60">{timeAgo(new Date().toISOString())}</span></span>
-              </div>
-            )}
-          </div>
-
-          {/* How to use tip */}
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-cyan-400/5 border border-cyan-400/15">
-            <Zap size={16} className="text-cyan-400 flex-shrink-0 mt-0.5" />
-            <p className="text-white/50 text-xs leading-relaxed">
-              <span className="text-cyan-400 font-medium">How to use: </span>
-              Type any trigger phrase in AI Chat and NEXUS will expand it using your defined shortcut,
-              executing the associated action automatically.
-            </p>
-          </div>
-
-          {/* Add Shortcut form */}
-          <div className="glass-panel rounded-2xl p-5 border border-cyan-400/10">
-            <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-              <Plus size={16} className="text-cyan-400" />
-              Add Shortcut
-            </h3>
-            <form onSubmit={handleAdd} className="space-y-3">
-              <div>
-                <label className="text-white/50 text-xs mb-1 block">Trigger Phrase</label>
-                <input
-                  className="nexus-input w-full text-sm font-mono"
-                  placeholder="e.g. morning routine, code review mode"
-                  value={trigger}
-                  onChange={e => setTrigger(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-white/50 text-xs mb-1 block">Expansion / Action</label>
-                <textarea
-                  className="nexus-input w-full text-sm resize-none"
-                  rows={3}
-                  placeholder="e.g. Create standup task, open calendar for today, set focus mode"
-                  value={expansion}
-                  onChange={e => setExpansion(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-white/50 text-xs mb-1 block">Description (optional)</label>
-                <input
-                  className="nexus-input w-full text-sm"
-                  placeholder="Notes for yourself about this shortcut"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                />
-              </div>
-              <button
-                type="submit"
-                className="nexus-btn-primary flex items-center gap-2 text-sm"
-              >
-                <Plus size={14} />
-                Add Shortcut
-              </button>
-            </form>
-          </div>
-
-          {/* User shortcuts list */}
-          {shortcuts.length > 0 && (
+          {/* Info banner */}
+          <div className="glass-panel rounded-xl p-4 border border-cyan-500/20 flex items-start gap-3">
+            <Zap size={18} className="text-cyan-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-white/30 text-xs uppercase tracking-wider mb-3">Your Shortcuts</p>
+              <p className="text-white/70 text-sm font-medium">Natural Language Shortcuts</p>
+              <p className="text-white/40 text-xs mt-0.5">
+                Create trigger phrases that expand into full prompts for NEXUS. Type a shortcut trigger in chat or click Run to launch it instantly.
+              </p>
+            </div>
+          </div>
+
+          {/* Toolbar */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setShowForm(!showForm); setEditingId(null); setForm({ trigger: '', expansion: '', description: '' }) }}
+              className="nexus-btn-primary flex items-center gap-2 text-sm"
+            >
+              <Plus size={16} />
+              New Shortcut
+            </button>
+          </div>
+
+          {/* Form */}
+          {showForm && (
+            <div className="glass-panel rounded-2xl p-5">
+              <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+                {editingId ? <Edit2 size={15} className="text-cyan-400" /> : <Plus size={15} className="text-cyan-400" />}
+                {editingId ? 'Edit Shortcut' : 'New Shortcut'}
+              </h3>
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <div>
+                  <label className="text-white/40 text-xs mb-1 block">Trigger phrase *</label>
+                  <input
+                    type="text"
+                    placeholder='e.g. "morning briefing", "end of day", "focus mode"'
+                    value={form.trigger}
+                    onChange={e => setForm(f => ({ ...f, trigger: e.target.value.toLowerCase() }))}
+                    required
+                    className="nexus-input"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-white/40 text-xs">Expansion (full prompt) *</label>
+                    <button
+                      type="button"
+                      onClick={suggestExpansion}
+                      disabled={aiSuggesting || !form.trigger.trim()}
+                      className="flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-300 disabled:opacity-30 transition-colors"
+                    >
+                      {aiSuggesting ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                      AI suggest
+                    </button>
+                  </div>
+                  <textarea
+                    placeholder="The full prompt that gets sent to NEXUS when this shortcut is triggered"
+                    value={form.expansion}
+                    onChange={e => setForm(f => ({ ...f, expansion: e.target.value }))}
+                    required
+                    rows={4}
+                    className="nexus-input resize-none"
+                  />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Description (optional)"
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  className="nexus-input"
+                />
+                <div className="flex gap-2">
+                  <button type="submit" disabled={submitting} className="nexus-btn-primary flex-1">
+                    {submitting ? 'Saving…' : editingId ? 'Save Changes' : 'Create Shortcut'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowForm(false); setEditingId(null) }}
+                    className="nexus-btn-secondary px-4"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* User shortcuts */}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+            </div>
+          ) : shortcuts.length === 0 && !showForm ? (
+            <div className="text-center py-10 glass-panel rounded-2xl">
+              <Zap size={36} className="text-white/15 mx-auto mb-3" />
+              <p className="text-white/40 text-sm">No shortcuts yet</p>
+              <p className="text-white/25 text-xs mt-1">Create one above or add from built-in templates below</p>
+            </div>
+          ) : (
+            shortcuts.length > 0 && (
               <div className="space-y-2">
-                {shortcuts.map(sc => (
-                  <div key={sc.id} className="glass-panel rounded-xl p-4 border border-white/5">
-                    <div className="flex items-start gap-3">
-                      <Zap size={16} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+                <h2 className="text-white/30 text-xs uppercase tracking-wider nexus-mono px-1">Your Shortcuts ({shortcuts.length})</h2>
+                {shortcuts.map(s => (
+                  <div key={s.id} className="glass-panel-hover rounded-xl p-4 group">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-cyan-400 font-mono text-sm font-medium">
-                            {sc.trigger}
-                          </span>
-                          {sc.useCount > 0 && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full border border-cyan-400/20 text-cyan-400/60">
-                              {sc.useCount} use{sc.useCount !== 1 ? 's' : ''}
+                        <div className="flex items-center gap-2 mb-1">
+                          <code className="text-cyan-400 text-sm font-mono bg-cyan-400/10 px-2 py-0.5 rounded-md">{s.trigger}</code>
+                          {s.useCount > 0 && (
+                            <span className="text-white/25 text-[10px] flex items-center gap-0.5">
+                              <Play size={8} /> {s.useCount}x
                             </span>
                           )}
                         </div>
-                        <p className="text-white/60 text-xs mt-1 leading-relaxed">{sc.expansion}</p>
-                        {sc.description && (
-                          <p className="text-white/30 text-xs mt-0.5">{sc.description}</p>
-                        )}
-                        {testResults[sc.id] !== undefined && (
-                          <div className="mt-2 p-2 rounded-lg bg-white/5 border border-white/10">
-                            <p className="text-white/50 text-[10px] uppercase tracking-wider mb-1">Response preview</p>
-                            <p className="text-white/60 text-xs leading-relaxed">
-                              {testResults[sc.id] || <span className="text-white/30 italic">Empty response</span>}
-                            </p>
-                          </div>
-                        )}
+                        {s.description && <p className="text-white/50 text-xs mb-1.5">{s.description}</p>}
+                        <p className="text-white/35 text-xs line-clamp-2">{s.expansion}</p>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => handleTest(sc)}
-                          disabled={testing === sc.id}
-                          title="Test shortcut"
-                          className="text-white/30 hover:text-cyan-400 transition-colors p-1.5 rounded-lg hover:bg-cyan-400/5 disabled:opacity-40 flex items-center gap-1 text-xs"
+                          onClick={() => handleCopy(s.expansion, s.id)}
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-white/30 hover:text-cyan-400 hover:bg-cyan-400/10 transition-all"
+                          title="Copy expansion"
                         >
-                          {testing === sc.id
-                            ? <Loader2 size={12} className="animate-spin" />
-                            : <Play size={12} />
-                          }
+                          {copied === s.id ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
                         </button>
                         <button
-                          onClick={() => handleDelete(sc.id)}
+                          onClick={() => startEdit(s)}
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-white/30 hover:text-cyan-400 hover:bg-cyan-400/10 transition-all"
+                          title="Edit"
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(s.id)}
+                          disabled={deletingId === s.id}
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-all"
                           title="Delete"
-                          className="text-white/20 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-400/5"
                         >
                           <Trash2 size={12} />
                         </button>
+                        <button
+                          onClick={() => handleRun(s)}
+                          className="flex items-center gap-1.5 px-3 h-7 rounded-md bg-cyan-400/15 text-cyan-400 text-xs font-medium hover:bg-cyan-400/25 transition-all"
+                          title="Run shortcut in chat"
+                        >
+                          <Play size={11} />
+                          Run
+                        </button>
                       </div>
                     </div>
+                    <div className="mt-2 flex items-center gap-2 text-[10px] text-white/20">
+                      <Clock size={9} />
+                      {timeAgo(s.createdAt)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* Built-in templates */}
+          {availableBuiltins.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-white/30 text-xs uppercase tracking-wider nexus-mono px-1 flex items-center gap-2">
+                <BookOpen size={11} />
+                Built-in Templates
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {availableBuiltins.map(b => (
+                  <div key={b.trigger} className="glass-panel rounded-xl p-4 flex items-start justify-between gap-3 group">
+                    <div className="flex-1 min-w-0">
+                      <code className="text-cyan-400/70 text-sm font-mono">{b.trigger}</code>
+                      <p className="text-white/40 text-xs mt-0.5">{b.description}</p>
+                    </div>
+                    <button
+                      onClick={() => addBuiltin(b)}
+                      className="flex items-center gap-1 text-xs text-white/40 hover:text-cyan-400 border border-white/10 hover:border-cyan-400/30 px-2.5 py-1 rounded-lg transition-all flex-shrink-0"
+                    >
+                      <Plus size={11} />
+                      Add
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Built-in shortcuts */}
-          <div className="glass-panel rounded-2xl p-5">
-            <h3 className="text-white font-medium mb-1 flex items-center gap-2">
-              <BookOpen size={16} className="text-cyan-400" />
-              Built-in Shortcuts
-            </h3>
-            <p className="text-white/30 text-xs mb-4">These shortcuts are always available — no setup needed.</p>
-            <div className="space-y-3">
-              {BUILTIN_SHORTCUTS.map(sc => (
-                <div
-                  key={sc.trigger}
-                  className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5"
-                >
-                  <Zap size={14} className="text-cyan-400/60 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-cyan-400/80 font-mono text-sm">{sc.trigger}</span>
-                    <p className="text-white/50 text-xs mt-0.5 leading-relaxed">{sc.expansion}</p>
-                    <p className="text-white/25 text-[10px] mt-0.5">{sc.description}</p>
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/10 text-white/25 flex-shrink-0 mt-0.5">
-                    built-in
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Empty state for user shortcuts */}
-          {shortcuts.length === 0 && (
-            <div className="glass-panel rounded-xl p-8 text-center border border-dashed border-white/10">
-              <Zap size={32} className="text-white/10 mx-auto mb-3" />
-              <p className="text-white/30 text-sm">No custom shortcuts yet.</p>
-              <p className="text-white/20 text-xs mt-1">Add one above to get started.</p>
-            </div>
-          )}
-
         </div>
       </div>
     </div>
