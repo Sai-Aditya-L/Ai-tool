@@ -50,7 +50,7 @@ interface AgentRun {
 interface AgentLog {
   id: string
   type: 'info' | 'tool_use' | 'tool_result' | 'thinking' | 'output' | 'error' | 'approval_needed'
-  message: string
+  content: string
   metadata?: Record<string, unknown> | null
   createdAt: string
 }
@@ -163,7 +163,7 @@ function LogEntry({ log }: { log: AgentLog }) {
       <span className={cn('text-xs flex-shrink-0 w-4 text-center leading-5', cls)}>{icon}</span>
       <div className="flex-1 min-w-0">
         <span className={cn('text-xs', cls === 'text-white/30' ? 'text-white/30 italic' : 'text-white/70')}>
-          {log.message}{toolName}
+          {log.content}{toolName}
         </span>
         <span className="block text-[10px] text-white/25 mt-0.5 nexus-mono">
           {formatRelativeTime(log.createdAt)}
