@@ -423,6 +423,23 @@ export default function CybersecurityPage() {
     URL.revokeObjectURL(url)
   }
 
+  async function saveAnalysisToNotes() {
+    if (!analysisResult) return
+    try {
+      const title = `${analysisType} — ${analysisFramework} — ${new Date().toLocaleDateString()}`
+      const content = `# ${title}\n\n${analysisResult}`
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, tags: ['cybersecurity', 'security-analysis'] }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Analysis saved to Notes')
+    } catch {
+      toast.error('Failed to save to notes')
+    }
+  }
+
   // ── Derived stats ───────────────────────────────────────────────────────────
 
   const totalRisks = risks.length
@@ -1312,13 +1329,22 @@ export default function CybersecurityPage() {
                 <div className="flex items-center justify-between">
                   <p className="text-white/50 text-xs nexus-mono tracking-wider">ANALYSIS OUTPUT</p>
                   {analysisResult && (
-                    <button
-                      onClick={exportReport}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs text-white/40 hover:text-cyan-400 hover:bg-cyan-400/10 border border-white/10 hover:border-cyan-400/20 transition-all"
-                    >
-                      <Download size={11} />
-                      Export Report
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={saveAnalysisToNotes}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs text-white/40 hover:text-violet-400 hover:bg-violet-400/10 border border-white/10 hover:border-violet-400/20 transition-all"
+                      >
+                        <BookOpen size={11} />
+                        Save to Notes
+                      </button>
+                      <button
+                        onClick={exportReport}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs text-white/40 hover:text-cyan-400 hover:bg-cyan-400/10 border border-white/10 hover:border-cyan-400/20 transition-all"
+                      >
+                        <Download size={11} />
+                        Export Report
+                      </button>
+                    </div>
                   )}
                 </div>
 
